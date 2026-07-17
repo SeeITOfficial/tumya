@@ -22,6 +22,16 @@ app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISO
 app.use('/admin', express.static(path.join(__dirname, '..', 'admin')));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
+// Serve the admin app
+app.get("/admin", (req, res) => {
+  res.sendFile(path.join(__dirname, "..", "admin", "index.html"));
+});
+
+// Serve the customer app
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "..", "public", "index.html"));
+});
+
 // Central error handler — keeps a stray thrown error from crashing the process
 app.use((err, req, res, next) => {
   console.error(err);
