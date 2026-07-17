@@ -14,6 +14,7 @@ app.use('/api/pickup-points', require('./routes/pickupPoints'));
 app.use('/api/orders', require('./routes/orders'));
 app.use('/api/parcels', require('./routes/parcels'));
 app.use('/api/push', require('./routes/push'));
+app.use("/api/notifications", require("./routes/notifications"));
 
 app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
 
