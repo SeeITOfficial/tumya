@@ -1,0 +1,21 @@
+# Dependencies
+**/node_modules/
+
+# Environment
+**/.env
+!.env.example
+
+# SQLite
+*.db
+*.db-shm
+*.db-wal
+
+# VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
