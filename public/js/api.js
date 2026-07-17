@@ -3,7 +3,7 @@ const API_BASE =
     ? "http://localhost:4000/api"
     : "/api";
 
-const Api = (() => {
+export const Api = (() => {
   function token() { return localStorage.getItem('tumya_token'); }
   function setToken(t) { localStorage.setItem('tumya_token', t); }
   function clearToken() { localStorage.removeItem('tumya_token'); }
