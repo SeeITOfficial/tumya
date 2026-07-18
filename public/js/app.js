@@ -138,11 +138,13 @@ window.openOrderDetail = openOrderDetail;
 window.parcelWizard = parcelWizard;
 window.renderParcelStep = renderParcelStep;
 
-const isDev =
-  location.hostname === "localhost" ||
-  location.hostname.startsWith("127.");
+const canUseServiceWorker =
+  "serviceWorker" in navigator &&
+  (window.isSecureContext ||
+    location.hostname === "localhost" ||
+    location.hostname.startsWith("127."));
 
-if (!isDev) {
+if (canUseServiceWorker) {
   navigator.serviceWorker.register("/sw.js");
 }
 
