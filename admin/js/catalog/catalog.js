@@ -30,7 +30,9 @@ export async function renderCatalog(view) {
         : `
           <div class="orders-mobile">
 
-            ${items.map(item => `
+            ${items
+              .map(
+                (item) => `
 
               <div class="order-card">
 
@@ -40,7 +42,7 @@ export async function renderCatalog(view) {
                     ${escapeHtml(item.name)}
                   </strong>
 
-                  <span class="status-chip">
+                  <span class="status-chip ${item.stock_status === "in_stock" ? "status-in-stock" : item.stock_status === "coming_soon" ? "status-coming-soon" : "status-out-of-stock"}">
                     ${item.stock_status.replace(/_/g, " ")}
                   </span>
 
@@ -122,7 +124,9 @@ export async function renderCatalog(view) {
 
               </div>
 
-            `).join("")}
+            `,
+              )
+              .join("")}
 
           </div>
         `
@@ -135,9 +139,7 @@ export async function renderCatalog(view) {
 
   document.querySelectorAll("[data-edit-item]").forEach((b) =>
     b.addEventListener("click", () => {
-      const item = items.find(
-        (row) => row.id === Number(b.dataset.editItem)
-      );
+      const item = items.find((row) => row.id === Number(b.dataset.editItem));
       showCatalogModal(item);
     }),
   );

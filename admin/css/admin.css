@@ -197,6 +197,21 @@ body { background: var(--paper); }
     text-transform:capitalize;
 }
 
+.status-chip.status-in-stock{
+    background:#f0fdf4;
+    color:#1c994a;
+}
+
+.status-chip.status-coming-soon{
+    background:#fff7ed;
+    color:#f59e0b;
+}
+
+.status-chip.status-out-of-stock{
+    background:#fef2f2;
+    color:#c90d0d;
+}
+
 .order-section{
     background:#fff;
     border-radius:18px;
