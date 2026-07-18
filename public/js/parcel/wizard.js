@@ -365,7 +365,7 @@ export function renderParcelStep(view) {
 
     case 5:
 
-    if(parcelWizard.data.pickup==="tumya"){
+    if (parcelWizard.data.pickup === "tumya") {
 
     view.innerHTML=`
 
@@ -524,7 +524,11 @@ export function renderParcelStep(view) {
 
     }
 
-    if(parcelWizard.data.pickup==="boda"){
+    if (parcelWizard.data.pickup === "boda") {
+
+    const existingName = parcelWizard.data.boda_name || "";
+    const existingPhone = parcelWizard.data.boda_phone || "";
+    const existingNotes = parcelWizard.data.boda_notes || "";
 
     view.innerHTML=`
 
@@ -544,15 +548,15 @@ export function renderParcelStep(view) {
 
     <label>Driver Name</label>
 
-    <input id="boda-name">
+    <input id="boda-name" value="${escapeHtml(existingName)}">
 
     <label>Phone Number</label>
 
-    <input id="boda-phone">
+    <input id="boda-phone" value="${escapeHtml(existingPhone)}">
 
     <label>Notes (optional)</label>
 
-    <textarea id="boda-notes"></textarea>
+    <textarea id="boda-notes">${escapeHtml(existingNotes)}</textarea>
 
     <button
     class="btn btn-block"
@@ -568,17 +572,18 @@ export function renderParcelStep(view) {
 
     document.getElementById("continue-boda").onclick=()=>{
 
-    parcelWizard.data.boda_name=
+    const bodaName = document.getElementById("boda-name").value.trim();
+    const bodaPhone = document.getElementById("boda-phone").value.trim();
+    const bodaNotes = document.getElementById("boda-notes").value.trim();
 
-    document.getElementById("boda-name").value;
+    if (!bodaName || !bodaPhone) {
+      toast("Driver name and phone are required.", true);
+      return;
+    }
 
-    parcelWizard.data.boda_phone=
-
-    document.getElementById("boda-phone").value;
-
-    parcelWizard.data.boda_notes=
-
-    document.getElementById("boda-notes").value;
+    parcelWizard.data.boda_name = bodaName;
+    parcelWizard.data.boda_phone = bodaPhone;
+    parcelWizard.data.boda_notes = bodaNotes;
 
     parcelWizard.step=6;
 
@@ -590,6 +595,14 @@ export function renderParcelStep(view) {
 
     }
 
+    // Self drop-off has no extra step-5 fields — go straight to review
+    if (parcelWizard.data.pickup === "self") {
+      parcelWizard.step = 6;
+      renderParcelStep(view);
+      break;
+    }
+
+    break;
 
     case 6:
 
@@ -618,12 +631,12 @@ export function renderParcelStep(view) {
 
         <div class="review-row">
           <strong>Driver</strong>
-          <span>${parcelWizard.data.boda_name}</span>
+          <span>${escapeHtml(parcelWizard.data.boda_name || "-")}</span>
         </div>
 
         <div class="review-row">
           <strong>Phone</strong>
-          <span>${parcelWizard.data.boda_phone}</span>
+          <span>${escapeHtml(parcelWizard.data.boda_phone || "-")}</span>
         </div>
       `;
     }
@@ -674,10 +687,7 @@ export function renderParcelStep(view) {
     <button
     class="btn btn-secondary"
     style="flex:1"
-    onclick="
-    parcelWizard.step=5;
-    renderParcelStep(document.getElementById('view'));
-    ">
+    id="backParcelBtn">
     Back
     </button>
 
@@ -692,6 +702,12 @@ export function renderParcelStep(view) {
 
     </div>
     `;
+
+    document.getElementById("backParcelBtn").onclick = () => {
+      // Self skip has no step-5 form; go back to pickup method
+      parcelWizard.step = parcelWizard.data.pickup === "self" ? 4 : 5;
+      renderParcelStep(view);
+    };
 
     document
     .getElementById("submitParcelBtn")
@@ -777,7 +793,7 @@ export function renderParcelStep(view) {
     `;
 
     document.getElementById("trackNowBtn").onclick = () => {
-      goto("track");
+      goto("orders");
     };
 
     }catch(err){

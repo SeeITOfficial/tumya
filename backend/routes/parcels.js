@@ -4,8 +4,18 @@ const db = require('../db');
 const { requireAuth, requireAdmin } = require('../lib/auth');
 const { generateTrackingCode } = require('../lib/trackingCode');
 const { updateStatus } = require('../lib/orderLifecycle');
-const { createParcelPayment, buildUpiLink, momoNumbers, submitReference, verifyPayment } = require('../lib/payments');
+const {
+    createParcelPayment,
+    buildUpiLink,
+    momoNumbers,
+    submitReference,
+    verifyPayment
+} = require("../lib/payments");
 
+const {
+    upload,
+    saveImage
+} = require("../lib/upload");
 function validateHandler(prefix, body) {
   const type = body[`${prefix}_handler_type`];
   if (!['self_pickup', 'own_agent', 'you_deliver'].includes(type)) {
@@ -23,7 +33,7 @@ function validateHandler(prefix, body) {
 }
 
 // Customer: submit a parcel (send or receive)
-router.post('/', requireAuth, (req, res) => {
+router.post("/", requireAuth, upload.single("photo"), async (req, res) => {  
   const b = req.body;
   if (!b.direction || !['india_to_uganda', 'uganda_to_india'].includes(b.direction)) {
     return res.status(400).json({ error: 'direction must be india_to_uganda or uganda_to_india' });
@@ -42,6 +52,15 @@ router.post('/', requireAuth, (req, res) => {
 
   const trackingCode = generateTrackingCode();
 
+  let photo_url = null;
+  try {
+    if (req.file) {
+      photo_url = await saveImage(req.file, "parcels");
+    }
+  } catch (err) {
+    return res.status(400).json({ error: err.message || "Unable to save photo" });
+  }
+
   const tx = db.transaction(() => {
     const orderResult = db
       .prepare(
@@ -57,7 +76,7 @@ router.post('/', requireAuth, (req, res) => {
         drop_handler_type, drop_point_id, drop_agent_name, drop_agent_phone, drop_address
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
-      orderId, b.direction, b.send_or_receive, b.description, b.photo_url || null,
+      orderId, b.direction, b.send_or_receive, b.description, photo_url,
       b.pickup_handler_type, b.pickup_point_id || null, b.pickup_agent_name || null, b.pickup_agent_phone || null, b.pickup_address || null,
       b.drop_handler_type, b.drop_point_id || null, b.drop_agent_name || null, b.drop_agent_phone || null, b.drop_address || null
     );

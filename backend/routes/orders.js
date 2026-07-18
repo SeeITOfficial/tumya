@@ -60,7 +60,7 @@ router.post('/catalog', requireAuth, (req, res) => {
   res.status(201).json(db.prepare(`SELECT * FROM orders WHERE id = ?`).get(orderId));
 });
 
-// Anyone with the code: track an order
+// Anyone with the code: track an order (includes detail for Order Details screen)
 router.get('/track/:trackingCode', (req, res) => {
   const order = db.prepare(`SELECT * FROM orders WHERE tracking_code = ?`).get(req.params.trackingCode);
   if (!order) return res.status(404).json({ error: 'Order not found' });
@@ -68,12 +68,33 @@ router.get('/track/:trackingCode', (req, res) => {
   const history = db
     .prepare(`SELECT status, note, timestamp FROM status_history WHERE order_id = ? ORDER BY timestamp`)
     .all(order.id);
-  res.json({ order, history });
+
+  const detail = { order, history };
+  if (order.type === 'catalog') {
+    detail.items = db.prepare(`SELECT * FROM order_items WHERE order_id = ?`).all(order.id);
+  } else {
+    detail.parcel = db.prepare(`SELECT * FROM parcels WHERE order_id = ?`).get(order.id);
+  }
+  detail.payment = db.prepare(`SELECT * FROM payments WHERE order_id = ?`).get(order.id);
+
+  res.json(detail);
 });
 
 // Customer: list own orders
 router.get('/mine', requireAuth, (req, res) => {
-  const orders = db.prepare(`SELECT * FROM orders WHERE customer_id = ? ORDER BY created_at DESC`).all(req.user.id);
+  const orders = db.prepare(`
+    SELECT o.*,
+      (
+        SELECT sh.note
+        FROM status_history sh
+        WHERE sh.order_id = o.id
+        ORDER BY sh.timestamp DESC
+        LIMIT 1
+      ) AS latest_note
+    FROM orders o
+    WHERE o.customer_id = ?
+    ORDER BY o.created_at DESC
+  `).all(req.user.id);
   res.json(orders);
 });
 

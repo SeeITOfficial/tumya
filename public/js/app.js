@@ -3,7 +3,7 @@ import { setupPush } from "./notifications/notifications.js";
 import { renderHome, openProduct, closeProduct, openImageViewer, closeImageViewer, changeQty } from "./catalog/catalog.js";
 import { addToCart } from "./catalog/cart.js";
 import { renderParcelForm, renderParcelStep, parcelWizard } from "./parcel/wizard.js";
-import { renderTrack, doTrack } from "./parcel/tracking.js";
+import { renderOrders, openOrderDetail } from "./orders/orders.js";
 import { renderAccount } from "./account/account.js";
 
 // --- App state ---
@@ -11,13 +11,23 @@ let activeTab = "home";
 
 const app = document.getElementById("app");
 
+function trackCodeFromUrl() {
+  return new URLSearchParams(location.search).get("track");
+}
+
 // --- Boot ---
 async function boot() {
   if (!Api.token()) {
     renderLogin();
   } else {
     renderShell();
-    await goto("home");
+    const trackCode = trackCodeFromUrl();
+    if (trackCode) {
+      await goto("orders");
+      await openOrderDetail(trackCode);
+    } else {
+      await goto("home");
+    }
   }
 }
 
@@ -59,7 +69,13 @@ async function doLogin() {
     Api.setToken(token);
     Api.setUser(user);
     renderShell();
-    await goto("home");
+    const trackCode = trackCodeFromUrl();
+    if (trackCode) {
+      await goto("orders");
+      await openOrderDetail(trackCode);
+    } else {
+      await goto("home");
+    }
     setupPush();
   } catch (err) {
     errEl.textContent = err.message;
@@ -79,7 +95,7 @@ function renderShell() {
     <div class="tabbar">
       <button data-tab="home">Shop</button>
       <button data-tab="parcel">Send/Receive</button>
-      <button data-tab="track">My Parcels</button>
+      <button data-tab="orders">Orders</button>
       <button data-tab="account">Account</button>
     </div>
   `;
@@ -97,10 +113,15 @@ export async function goto(tab) {
   view.innerHTML = `<div class="empty-state">Loading...</div>`;
 
   try {
-    if (tab === "home") await renderHome(view);
-    else if (tab === "parcel") renderParcelForm(view);
-    else if (tab === "track") renderTrack(view);
-    else if (tab === "account") await renderAccount(view);
+    if (tab === "home") {
+      await renderHome(view);
+    } else if (tab === "parcel") {
+      renderParcelForm(view);
+    } else if (tab === "orders") {
+      await renderOrders(view);
+    } else if (tab === "account") {
+      await renderAccount(view);
+    }
   } catch (err) {
     view.innerHTML = `<div class="empty-state">Couldn't load this page.<br>${err.message}</div>`;
   }
@@ -113,16 +134,16 @@ window.openImageViewer = openImageViewer;
 window.closeImageViewer = closeImageViewer;
 window.changeQty = changeQty;
 window.addToCart = addToCart;
-window.doTrack = doTrack;
+window.openOrderDetail = openOrderDetail;
 window.parcelWizard = parcelWizard;
 window.renderParcelStep = renderParcelStep;
 
 const isDev =
-    location.hostname === "localhost" ||
-    location.hostname.startsWith("127.");
+  location.hostname === "localhost" ||
+  location.hostname.startsWith("127.");
 
 if (!isDev) {
-    navigator.serviceWorker.register("/sw.js");
+  navigator.serviceWorker.register("/sw.js");
 }
 
 boot();

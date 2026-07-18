@@ -1,6 +1,7 @@
 import { Api } from "../api.js";
 import { escapeHtml } from "../shared/utils.js";
 import { goto, renderLogin } from "../app.js";
+import { openOrderDetail } from "../orders/orders.js";
 
 // --- Account ---
 export async function renderAccount(view) {
@@ -38,9 +39,10 @@ export async function renderAccount(view) {
     <button class="btn btn-outline btn-block form-action-secondary" id="logout-btn">Log out</button>
   `;
   document.querySelectorAll("[data-track]").forEach((el) =>
-    el.addEventListener("click", () => {
+    el.addEventListener("click", async () => {
       history.replaceState(null, "", `/?track=${el.dataset.track}`);
-      goto("track");
+      await goto("orders");
+      await openOrderDetail(el.dataset.track);
     }),
   );
   document.getElementById("logout-btn").addEventListener("click", () => {

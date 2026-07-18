@@ -179,8 +179,10 @@ function showCatalogModal(item = null) {
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
   const state = {
-    photo1: item?.photo_url || null,
-    photo2: item?.photo_url_2 || null,
+    photo1: null,
+    photo2: null,
+    preview1: item?.photo_url || null,
+    preview2: item?.photo_url_2 || null,
   };
   overlay.innerHTML = `
     <div class="modal">
@@ -204,7 +206,7 @@ function showCatalogModal(item = null) {
         <div class="photo-grid">
           <div class="photo-slot">
             <div class="photo-slot-label">Main photo</div>
-            <div class="photo-preview" id="ci-photo-1-preview">${state.photo1 ? `<img src="${state.photo1}" alt="Main preview" />` : "<span>No photo selected</span>"}</div>
+            <div class="photo-preview" id="ci-photo-1-preview">${state.preview1 ? `<img src="${state.preview1}" alt="Main preview" />` : "<span>No photo selected</span>"}</div>
             <input id="ci-photo-1" class="photo-input" type="file" accept="image/*" />
             <div class="photo-slot-actions">
               <button class="btn btn-sm btn-outline photo-slot-btn" type="button" data-photo-camera="1">Camera</button>
@@ -214,7 +216,7 @@ function showCatalogModal(item = null) {
           </div>
           <div class="photo-slot">
             <div class="photo-slot-label">Second photo</div>
-            <div class="photo-preview" id="ci-photo-2-preview">${state.photo2 ? `<img src="${state.photo2}" alt="Second preview" />` : "<span>Optional</span>"}</div>
+            <div class="photo-preview" id="ci-photo-2-preview">${state.preview2 ? `<img src="${state.preview2}" alt="Second preview" />` : "<span>Optional</span>"}</div>
             <input id="ci-photo-2" class="photo-input" type="file" accept="image/*" />
             <div class="photo-slot-actions">
               <button class="btn btn-sm btn-outline photo-slot-btn" type="button" data-photo-camera="2">Camera</button>
@@ -263,47 +265,57 @@ function showCatalogModal(item = null) {
         "<span>Optional</span>";
     });
 
-  photo1Input.addEventListener("change", async (e) => {
+  photo1Input.addEventListener("change", (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    try {
-      state.photo1 = await compressCatalogPhoto(file);
-      document.getElementById("ci-photo-1-preview").innerHTML =
-        `<img src="${state.photo1}" alt="Main preview" />`;
-    } catch (err) {
-      toast(err.message, true);
-    }
+
+    state.photo1 = file;
+
+    document.getElementById("ci-photo-1-preview").innerHTML =
+      `<img src="${URL.createObjectURL(file)}">`;
   });
 
-  photo2Input.addEventListener("change", async (e) => {
+  photo2Input.addEventListener("change", (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    try {
-      state.photo2 = await compressCatalogPhoto(file);
-      document.getElementById("ci-photo-2-preview").innerHTML =
-        `<img src="${state.photo2}" alt="Second preview" />`;
-    } catch (err) {
-      toast(err.message, true);
-    }
-  });
 
+    state.photo2 = file;
+
+    document.getElementById("ci-photo-2-preview").innerHTML =
+      `<img src="${URL.createObjectURL(file)}">`;
+  });
   document.getElementById("ci-save").addEventListener("click", async () => {
     const name = document.getElementById("ci-name").value.trim();
     const unit = document.getElementById("ci-unit").value.trim();
     const price = Number(document.getElementById("ci-price").value);
     const stockStatus = document.getElementById("ci-stock-status").value;
-    if (!name || !unit || !price) return toast("Fill all fields", true);
-    const payload = {
-      name,
-      unit,
-      price,
-      stock_status: stockStatus,
-      photo_url: state.photo1,
-      photo_url_2: state.photo2,
-    };
+
+    if (!name || !unit || !price) {
+      return toast("Fill all fields", true);
+    }
+
+    const form = new FormData();
+
+    form.append("name", name);
+    form.append("unit", unit);
+    form.append("price", price);
+    form.append("stock_status", stockStatus);
+
+    if (state.photo1 instanceof File) {
+      form.append("photo", state.photo1);
+    }
+
+    if (state.photo2 instanceof File) {
+      form.append("photo2", state.photo2);
+    }
+
     try {
-      if (item?.id) await AdminApi.updateCatalogItem(item.id, payload);
-      else await AdminApi.addCatalogItem(payload);
+      if (item?.id) {
+        await AdminApi.updateCatalogItem(item.id, form);
+      } else {
+        await AdminApi.addCatalogItem(form);
+      }
+
       overlay.remove();
       goto("catalog");
     } catch (err) {

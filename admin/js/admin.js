@@ -24,27 +24,44 @@ export const AdminApi = (() => {
   }
 
   async function request(path, { method = "GET", body } = {}) {
-    const headers = { "Content-Type": "application/json" };
-    if (token()) headers.Authorization = `Bearer ${token()}`;
+    const headers = {};
+
+    if (token()) {
+      headers.Authorization = `Bearer ${token()}`;
+    }
+
+    const options = {
+      method,
+      headers,
+    };
+
+    if (body instanceof FormData) {
+      options.body = body;
+    } else if (body) {
+      headers["Content-Type"] = "application/json";
+      options.body = JSON.stringify(body);
+    }
 
     let res;
+
     try {
-      res = await fetch(`/api${path}`, {
-        method,
-        headers,
-        body: body ? JSON.stringify(body) : undefined,
-      });
+      res = await fetch(`/api${path}`, options);
     } catch {
       throw new Error("Cannot reach the server.");
     }
+
     let data;
+
     try {
       data = await res.json();
     } catch {
       data = {};
     }
-    if (!res.ok)
+
+    if (!res.ok) {
       throw new Error(data.error || `Request failed (${res.status})`);
+    }
+
     return data;
   }
 
