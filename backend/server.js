@@ -16,6 +16,7 @@ app.use('/api/parcels', require('./routes/parcels'));
 app.use('/api/push', require('./routes/push'));
 app.use("/api/notifications", require("./routes/notifications"));
 app.use("/uploads", express.static(path.join(__dirname, "public", "uploads")));
+app.use("/images", express.static(path.join(__dirname, "public", "images")));
 
 app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
 

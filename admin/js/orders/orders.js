@@ -124,9 +124,13 @@ export async function renderOrders(view) {
   );
 
   document.querySelectorAll("tr.clickable").forEach((tr) =>
-    tr.addEventListener("click", () =>
-      renderOrderDetail(Number(tr.dataset.id)),
-    ),
+    tr.addEventListener("click", (e) => {
+
+      if (e.target.closest("button")) return;
+
+      renderOrderDetail(Number(tr.dataset.id));
+
+    }),
   );
 }
 
@@ -235,14 +239,30 @@ function catalogOrderDetailHtml(order, items, payment) {
     <div class="card" style="padding:16px; margin-bottom:16px;">
       <h3 style="font-size:14px; margin:0 0 10px;">Items</h3>
       ${(items || [])
-        .map(
-          (
-            i,
-          ) => `<div style="display:flex; justify-content:space-between; padding:4px 0; font-size:14px;">
-        <span>Item #${i.catalog_item_id} × ${i.qty}</span><span>₹${i.unit_price}</span>
-      </div>`,
-        )
-        .join("")}
+      .map(i => `
+      <div class="order-item">
+
+          <div class="order-item-info">
+
+              <div class="order-item-name">
+                  ${escapeHtml(i.name)}
+              </div>
+
+              <div class="order-item-meta">
+                  ${i.unit}
+                  ·
+                  Qty ${i.qty}
+              </div>
+
+          </div>
+
+          <div class="order-item-price">
+              ₹${i.unit_price * i.qty}
+          </div>
+
+      </div>
+      `)
+      .join("")}
       <div style="font-weight:700; margin-top:8px; border-top:1px solid var(--line); padding-top:8px;">Total: ₹${order.total_amount}</div>
 
       <div style="margin-top:16px;">
@@ -275,16 +295,7 @@ function catalogNextAction(order) {
             `;
 
         case "confirmed":
-            return `
-                <button
-                    class="btn btn-block"
-                    id="status-update-btn"
-                    data-next="out_for_delivery">
-
-                    Start Delivery
-
-                </button>
-            `;
+            return `<button class="btn btn-sm" onclick="advanceOrder(${order.id}, 'out_for_delivery')">Start Delivery</button>`;
 
         case "out_for_delivery":
             return `
@@ -555,11 +566,30 @@ function wireOrderDetailActions(order, parcel, payment) {
       try {
         const { upi_link, amount } = await AdminApi.revealQr(order.id);
         document.getElementById("qr-area").innerHTML = `
-        <div class="qr-box">
-          <div style="font-weight:700; margin-bottom:8px;">Show this to the customer to scan — ₹${amount}</div>
-          <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upi_link)}" width="200" height="200" />
-        </div>
-      `;
+            <div class="qr-box">
+
+                <div style="font-weight:700;font-size:18px;margin-bottom:8px;">
+                    Scan to Pay
+                </div>
+
+                <div style="margin-bottom:16px;color:var(--ink-soft);">
+                    Amount: <strong>₹${amount}</strong>
+                </div>
+
+                <img
+                    src="/images/upi_qr.jpeg"
+                    alt="UPI QR"
+                    style="
+                        width:260px;
+                        max-width:100%;
+                        border-radius:12px;
+                        display:block;
+                        margin:0 auto;
+                    "
+                >
+
+            </div>
+        `;
       } catch (err) {
         toast(err.message, true);
       }
@@ -655,23 +685,18 @@ function nextActionButton(order) {
     switch (order.status) {
 
       case "pending":
-        return `<button class="btn btn-sm" onclick="advanceOrder(${order.id}, 'confirmed')">
-          Confirm
+        return `<button class="btn btn-sm btn-block" onclick="advanceOrder(${order.id}, 'confirmed')">
+          Confirm Order
         </button>`;
 
       case "confirmed":
-        return `<button class="btn btn-sm" onclick="advanceOrder(${order.id}, 'in_transit')">
-          Start Transit
-        </button>`;
-
-      case "in_transit":
-        return `<button class="btn btn-sm" onclick="advanceOrder(${order.id}, 'out_for_delivery')">
-          Out for Delivery
+        return `<button class="btn btn-sm btn-block" onclick="advanceOrder(${order.id}, 'out_for_delivery')">
+          Start Delivery
         </button>`;
 
       case "out_for_delivery":
-        return `<button class="btn btn-sm" onclick="advanceOrder(${order.id}, 'delivered')">
-          Deliver
+        return `<button class="btn btn-sm btn-block" onclick="openOrder(${order.id})">
+          Complete Delivery
         </button>`;
 
       case "delivered":
@@ -698,5 +723,11 @@ async function advanceOrder(id, status) {
   }
 
 }
+
+function openOrder(id){
+    renderOrderDetail(id);
+}
+
+window.openOrder = openOrder;
 
 window.advanceOrder = advanceOrder;

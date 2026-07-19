@@ -102,10 +102,54 @@ body { background: var(--paper); }
 .photo-slot-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 .photo-slot-btn { flex: 1 1 calc(50% - 4px); min-width: 88px; }
 
-@media (max-width: 720px) {
-  .admin-shell { flex-direction: column; }
-  .sidebar { width: 100%; }
-  .admin-main { padding: 18px; }
+@media (max-width: 768px) {
+
+  .admin-shell{
+    display:block;
+  }
+
+  .sidebar{
+    width:100%;
+    position:sticky;
+    top:0;
+    z-index:100;
+    padding:12px 16px;
+  }
+
+  .sidebar-brand{
+    margin-bottom:12px;
+  }
+
+  .sidebar nav{
+    display:flex;
+    gap:8px;
+    overflow-x:auto;
+    padding-bottom:6px;
+    scrollbar-width:none;
+  }
+
+  .sidebar nav::-webkit-scrollbar{
+    display:none;
+  }
+
+  .sidebar nav button{
+    flex:0 0 auto;
+    white-space:nowrap;
+    margin:0;
+  }
+
+  .sidebar-user{
+    position:static;
+    margin-top:12px;
+    padding:0;
+  }
+
+  .admin-main{
+    width:100%;
+    max-width:none;
+    padding:16px;
+  }
+
 }
 
 
@@ -254,4 +298,76 @@ body { background: var(--paper); }
 
 .stat-card:active{
     transform:scale(.98);
+}
+
+@media (max-width:768px){
+
+  .data-table{
+    display:block;
+    background:transparent;
+    box-shadow:none;
+    border-radius:0;
+  }
+
+  .data-table thead{
+    display:none;
+  }
+
+  .data-table tbody{
+    display:block;
+  }
+
+  .data-table tr{
+    display:block;
+    background:#fff;
+    margin-bottom:16px;
+    padding:16px;
+    border-radius:18px;
+    box-shadow:0 8px 24px rgba(0,0,0,.08);
+  }
+
+  .data-table td{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:16px;
+    border:none;
+    padding:10px 0;
+  }
+
+  .data-table td:last-child{
+    padding-bottom:0;
+  }
+
+}
+
+.order-item{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+
+    padding:14px 0;
+
+    border-bottom:1px solid var(--line);
+}
+
+.order-item:last-child{
+    border-bottom:none;
+}
+
+.order-item-name{
+    font-size:16px;
+    font-weight:700;
+}
+
+.order-item-meta{
+    margin-top:4px;
+    font-size:13px;
+    color:var(--ink-soft);
+}
+
+.order-item-price{
+    font-size:18px;
+    font-weight:700;
+    color:var(--orange-700);
 }

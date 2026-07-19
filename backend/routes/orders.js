@@ -125,8 +125,24 @@ router.get('/:id', requireAuth, requireAdmin, (req, res) => {
 
   const detail = { order };
   if (order.type === 'catalog') {
-    detail.items = db.prepare(`SELECT * FROM order_items WHERE order_id = ?`).all(order.id);
-  } else {
+    detail.items = db.prepare(`
+    SELECT
+        oi.catalog_item_id,
+        oi.qty,
+        oi.unit_price,
+
+        ci.name,
+        ci.unit,
+        ci.price,
+        ci.photo_url
+
+    FROM order_items oi
+    INNER JOIN catalog_items ci
+        ON oi.catalog_item_id = ci.id
+
+    WHERE oi.order_id = ?
+    `).all(order.id);  }
+  else {
     detail.parcel = db.prepare(`SELECT * FROM parcels WHERE order_id = ?`).get(order.id);
   }
   detail.payment = db.prepare(`SELECT * FROM payments WHERE order_id = ?`).get(order.id);
