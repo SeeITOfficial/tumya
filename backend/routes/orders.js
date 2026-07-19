@@ -35,8 +35,7 @@ router.post('/catalog', requireAuth, (req, res) => {
     const tx = db.transaction(() => {
       const orderResult = db
         .prepare(
-          `INSERT INTO orders (customer_id, type, status, payment_mode, total_amount, tracking_code)
-           VALUES (?, 'catalog', 'confirmed', ?, ?, ?)`
+          `INSERT INTO orders (customer_id, type, status, payment_mode, total_amount, tracking_code) VALUES (?, 'catalog', 'pending', ?, ?, ?)`
         )
         .run(req.user.id, payment_mode, total, trackingCode);
       const newOrderId = orderResult.lastInsertRowid;
@@ -46,7 +45,7 @@ router.post('/catalog', requireAuth, (req, res) => {
       );
       for (const r of catalogRows) insertItem.run(newOrderId, r.item.id, r.qty, r.item.price);
 
-      db.prepare(`INSERT INTO status_history (order_id, status, note) VALUES (?, 'confirmed', 'Order placed')`).run(newOrderId);
+      db.prepare(`INSERT INTO status_history (order_id, status, note) VALUES (?, 'pending', 'Order Received')`).run(newOrderId);
 
       createCatalogPayment(newOrderId, total, payment_mode);
 

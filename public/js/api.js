@@ -37,6 +37,11 @@ export const Api = (() => {
     getCatalog: () => request('/catalog', { auth: false }),
     getPickupPoints: () => request('/pickup-points', { auth: false }),
     placeCatalogOrder: (items, payment_mode) => request('/orders/catalog', { method: 'POST', body: { items, payment_mode } }),
+    createCatalogBookings: (items) =>
+      request("/catalog/bookings", {
+        method: "POST",
+        body: { items },
+      }),
     myOrders: () => request('/orders/mine'),
     track: (code) => request(`/orders/track/${code}`, { auth: false }),
     submitParcel: (payload) => request('/parcels', { method: 'POST', body: payload }),

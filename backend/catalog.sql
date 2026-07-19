@@ -29,3 +29,28 @@ INSERT INTO catalog_items VALUES(16,'Maize Flour','1kg',200.0,'coming_soon','/up
 INSERT INTO catalog_items VALUES(17,'Empombo','1',50.0,'out_of_stock','/uploads/catalog/0b00c260-3504-458e-b4a3-342e04fd0bf7.webp','/uploads/catalog/aabb8e34-5a56-4c05-ad9e-1d0ff055b94b.webp','2026-07-16 14:10:50');
 INSERT INTO catalog_items VALUES(18,'Blueband','250g',300.0,'in_stock','/uploads/catalog/a7282c81-f9c3-4e16-9a85-6eaf435deb39.webp',NULL,'2026-07-16 14:14:31');
 COMMIT;
+
+
+CREATE TABLE IF NOT EXISTS catalog_bookings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    user_id INTEGER NOT NULL,
+    catalog_item_id INTEGER NOT NULL,
+
+    qty INTEGER NOT NULL CHECK(qty > 0),
+
+    status TEXT NOT NULL DEFAULT 'pending'
+        CHECK(status IN (
+            'pending',
+            'sourcing',
+            'arrived',
+            'customer_notified',
+            'completed',
+            'cancelled'
+        )),
+
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY(user_id) REFERENCES users(id),
+    FOREIGN KEY(catalog_item_id) REFERENCES catalog_items(id)
+);

@@ -123,3 +123,29 @@ CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders(customer_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_admin ON orders(handled_by_admin_id);
 CREATE INDEX IF NOT EXISTS idx_status_history_order ON status_history(order_id);
+
+CREATE TABLE IF NOT EXISTS catalog_bookings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    user_id INTEGER NOT NULL,
+    catalog_item_id INTEGER NOT NULL,
+
+    qty INTEGER NOT NULL CHECK (qty > 0),
+
+    status TEXT NOT NULL DEFAULT 'pending'
+        CHECK (
+            status IN (
+                'pending',
+                'sourcing',
+                'arrived',
+                'customer_notified',
+                'completed',
+                'cancelled'
+            )
+        ),
+
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY(catalog_item_id) REFERENCES catalog_items(id)
+);

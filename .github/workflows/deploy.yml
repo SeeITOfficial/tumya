@@ -16,7 +16,10 @@ jobs:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_KEY }}
-
+          port: 22
+          timeout: 60s
+          command_timeout: 10m
+          sync: true
           script: |
             set -e
 

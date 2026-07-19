@@ -54,6 +54,7 @@ export async function renderOrders(view) {
                 <th>Customer</th>
                 <th>Type</th>
                 <th>Status</th>
+                <th>Action</th>
                 <th>Amount</th>
                 <th>Handled by</th>
               </tr>
@@ -86,6 +87,8 @@ export async function renderOrders(view) {
                     <td style="text-transform:capitalize;">
                       ${o.status.replace(/_/g, " ")}
                     </td>
+
+                    <td>${nextActionButton(o)}</td>
 
                     <td>
                       ${o.total_amount != null ? `₹${o.total_amount}` : "—"}
@@ -121,9 +124,9 @@ export async function renderOrders(view) {
   );
 
 
-  document.querySelectorAll(".order-card").forEach((card) =>
+  document.querySelectorAll("tr.clickable").forEach((tr) =>
     tr.addEventListener("click", () =>
-      renderOrderDetail(Number(card.dataset.id)),
+      renderOrderDetail(Number(tr.dataset.id)),
     ),
   );
 }
@@ -250,14 +253,65 @@ function catalogOrderDetailHtml(order, items, payment) {
       </div>
 
       <div style="margin-top:16px;">
-        <label style="margin-top:0;">Advance status</label>
-        <select id="status-select">
-          ${["confirmed", "in_transit", "out_for_delivery", "delivered"].map((s) => `<option value="${s}" ${order.status === s ? "selected" : ""}>${s.replace(/_/g, " ")}</option>`).join("")}
-        </select>
-        <button class="btn btn-sm" id="status-update-btn" style="margin-top:10px;">Update status</button>
+        ${catalogNextAction(order)}
       </div>
     </div>
   `;
+}
+
+function catalogNextAction(order) {
+
+    switch (order.status) {
+
+        case "pending":
+            return `
+                <button
+                    class="btn btn-block"
+                    id="status-update-btn"
+                    data-next="confirmed">
+
+                    Confirm Order
+
+                </button>
+            `;
+
+        case "confirmed":
+            return `
+                <button
+                    class="btn btn-block"
+                    id="status-update-btn"
+                    data-next="out_for_delivery">
+
+                    Start Delivery
+
+                </button>
+            `;
+
+        case "out_for_delivery":
+            return `
+                <button
+                    class="btn btn-block"
+                    id="status-update-btn"
+                    data-next="delivered">
+
+                    Mark Delivered
+
+                </button>
+            `;
+
+        case "delivered":
+            return `
+                <div class="badge badge-ok">
+
+                    ✓ Delivered
+
+                </div>
+            `;
+
+        default:
+            return "";
+    }
+
 }
 
 function parcelOrderDetailHtml(order, parcel, payment) {
@@ -525,17 +579,31 @@ function wireOrderDetailActions(order, parcel, payment) {
     });
 
   const statusBtn = document.getElementById("status-update-btn");
-  if (statusBtn)
-    statusBtn.addEventListener("click", async () => {
-      const status = document.getElementById("status-select").value;
-      try {
-        await AdminApi.updateStatus(order.id, status);
-        toast("Status updated");
-        renderOrderDetail(order.id);
-      } catch (err) {
-        toast(err.message, true);
-      }
-    });
+
+  if (statusBtn) {
+
+      statusBtn.addEventListener("click", async () => {
+
+          try {
+
+              await AdminApi.updateStatus(
+                  order.id,
+                  statusBtn.dataset.next
+              );
+
+              toast("Status updated");
+
+              renderOrderDetail(order.id);
+
+          } catch (err) {
+
+              toast(err.message, true);
+
+          }
+
+      });
+
+  }
 
   const weighBtn = document.getElementById("weigh-btn");
   if (weighBtn)
@@ -579,3 +647,57 @@ function wireOrderDetailActions(order, parcel, payment) {
       }
     });
 }
+
+
+function nextActionButton(order) {
+
+  if (order.type === "catalog") {
+
+    switch (order.status) {
+
+      case "pending":
+        return `<button class="btn btn-sm" onclick="advanceOrder(${order.id}, 'confirmed')">
+          Confirm
+        </button>`;
+
+      case "confirmed":
+        return `<button class="btn btn-sm" onclick="advanceOrder(${order.id}, 'in_transit')">
+          Start Transit
+        </button>`;
+
+      case "in_transit":
+        return `<button class="btn btn-sm" onclick="advanceOrder(${order.id}, 'out_for_delivery')">
+          Out for Delivery
+        </button>`;
+
+      case "out_for_delivery":
+        return `<button class="btn btn-sm" onclick="advanceOrder(${order.id}, 'delivered')">
+          Deliver
+        </button>`;
+
+      case "delivered":
+        return `<span class="badge badge-success">Done</span>`;
+    }
+
+  }
+
+  return "";
+}
+
+async function advanceOrder(id, status) {
+
+  try {
+
+    await AdminApi.updateStatus(id, status);
+
+    await renderOrders(document.getElementById("view"));
+
+  } catch (err) {
+
+    alert(err.message);
+
+  }
+
+}
+
+window.advanceOrder = advanceOrder;

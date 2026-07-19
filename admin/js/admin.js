@@ -3,6 +3,7 @@ import { renderOrders } from "./orders/orders.js";
 import { renderCatalog } from "./catalog/catalog.js";
 import { renderPickupPoints } from "./pickup/pickup.js";
 import { renderRates } from "./rates/rates.js";
+import { renderBookings } from "./bookings/bookings.js";
 
 // --- Admin API client (separate token namespace from customer app) ---
 export const AdminApi = (() => {
@@ -109,6 +110,7 @@ export const AdminApi = (() => {
         body: { rate_per_kg },
       }),
     getCatalog: () => request("/catalog"),
+    getBookings: () => request("/catalog/bookings"),
     addCatalogItem: (payload) =>
       request("/catalog", { method: "POST", body: payload }),
     updateCatalogItem: (id, payload) =>
@@ -175,6 +177,7 @@ function renderShell() {
         <nav>
           <button data-tab="orders">Orders</button>
           <button data-tab="catalog">Catalog</button>
+          <button data-tab="bookings">Bookings</button>
           <button data-tab="pickup">Pickup Points</button>
           <button data-tab="rates">Parcel Rates</button>
         </nav>
@@ -207,6 +210,7 @@ export async function goto(tab) {
   try {
     if (tab === "orders") await renderOrders(view);
     else if (tab === "catalog") await renderCatalog(view);
+    else if (tab === "bookings") await renderBookings(view);
     else if (tab === "pickup") await renderPickupPoints(view);
     else if (tab === "rates") await renderRates(view);
   } catch (err) {

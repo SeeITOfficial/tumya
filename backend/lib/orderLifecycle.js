@@ -1,7 +1,14 @@
 const db = require('../db');
 const { notifyCustomer } = require('./push');
 
-const CATALOG_STATUSES = ['confirmed', 'in_transit', 'out_for_delivery', 'delivered'];
+const CATALOG_STATUSES = [
+    'pending',
+    'confirmed',
+    'in_transit',
+    'out_for_delivery',
+    'delivered'
+];
+
 const PARCEL_STATUSES = [
   'pending_quote',
   'quoted',
@@ -14,6 +21,7 @@ const PARCEL_STATUSES = [
 ];
 
 const STATUS_LABELS = {
+  pending: 'Awaiting confirmation',
   pending_quote: 'Waiting for quote',
   quoted: 'Quote ready',
   payment_pending: 'Waiting for payment confirmation',
@@ -22,6 +30,25 @@ const STATUS_LABELS = {
   out_for_delivery: 'Out for delivery',
   delivered: 'Delivered',
   ready_for_pickup: 'Ready for pickup',
+};
+
+const NEXT_ACTION = {
+  pending: {
+    nextStatus: "confirmed",
+    button: "Confirm Order",
+  },
+
+  confirmed: {
+    nextStatus: "out_for_delivery",
+    button: "Start Delivery",
+  },
+
+  out_for_delivery: {
+    nextStatus: "delivered",
+    button: "Mark Delivered",
+  },
+
+  delivered: null,
 };
 
 function validStatusesFor(orderType) {
@@ -56,4 +83,9 @@ async function updateStatus(orderId, newStatus, { note, changedBy } = {}) {
   return db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
 }
 
-module.exports = { updateStatus, validStatusesFor, STATUS_LABELS };
+module.exports = {
+  updateStatus,
+  validStatusesFor,
+  STATUS_LABELS,
+  NEXT_ACTION,
+};

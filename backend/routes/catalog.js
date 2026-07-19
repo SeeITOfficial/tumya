@@ -179,6 +179,66 @@ router.delete("/:id", requireAuth, requireAdmin, (req, res) => {
   res.status(204).send();
 });
 
+
+// Customer: create bookings
+router.post("/bookings", requireAuth, (req, res) => {
+  const { items } = req.body;
+
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({
+      error: "No booking items supplied.",
+    });
+  }
+
+  const insertBooking = db.prepare(`
+    INSERT INTO catalog_bookings
+    (
+      user_id,
+      catalog_item_id,
+      qty
+    )
+    VALUES (?, ?, ?)
+  `);
+
+  const createdBookings = [];
+
+  const createBookings = db.transaction(() => {
+
+    for (const item of items) {
+
+      const result = insertBooking.run(
+        req.user.id,
+        item.catalog_item_id,
+        item.qty
+      );
+
+      createdBookings.push(result.lastInsertRowid);
+
+    }
+
+  });
+
+  try {
+
+    createBookings();
+
+    res.status(201).json({
+      success: true,
+      booking_ids: createdBookings,
+      bookings_created: createdBookings.length,
+    });
+
+  } catch (err) {
+
+    console.error(err);
+
+    res.status(500).json({
+      error: "Failed to create booking.",
+    });
+
+  }
+});
+
 function deleteCatalogImage(imagePath) {
   if (!imagePath) return;
 
@@ -197,4 +257,36 @@ function deleteCatalogImage(imagePath) {
     }
   });
 }
+
+// Admin: list all catalog bookings
+router.get("/bookings", requireAuth, requireAdmin, (req, res) => {
+
+  const bookings = db.prepare(`
+    SELECT
+      cb.id,
+      cb.qty,
+      cb.status,
+      cb.created_at,
+
+      u.name AS customer_name,
+      u.phone AS customer_phone,
+
+      ci.name AS product_name,
+      ci.photo_url
+
+    FROM catalog_bookings cb
+
+    JOIN users u
+      ON cb.user_id = u.id
+
+    JOIN catalog_items ci
+      ON cb.catalog_item_id = ci.id
+
+    ORDER BY cb.created_at DESC
+  `).all();
+
+  res.json(bookings);
+
+});
+
 module.exports = router;
