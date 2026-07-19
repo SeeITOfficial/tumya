@@ -1,11 +1,33 @@
 import { Api } from "./api.js";
 import { setupPush } from "./notifications/notifications.js";
-import { renderHome, openProduct, closeProduct, openImageViewer, closeImageViewer, changeQty } from "./catalog/catalog.js";
-import { addToCart } from "./catalog/cart.js";
-import { renderParcelForm, renderParcelStep, parcelWizard } from "./parcel/wizard.js";
-import { renderOrders, openOrderDetail } from "./orders/orders.js";
-import { renderAccount } from "./account/account.js";
 
+import {
+  renderHome,
+  openProduct,
+  closeProduct,
+  openImageViewer,
+  closeImageViewer,
+  changeQty,
+} from "./catalog/catalog.js";
+
+import {
+  addToCart,
+  updateCartBadge,
+  renderCartPage,
+} from "./catalog/cart.js";
+
+import {
+  renderParcelForm,
+  renderParcelStep,
+  parcelWizard,
+} from "./parcel/wizard.js";
+
+import {
+  renderOrders,
+  openOrderDetail,
+} from "./orders/orders.js";
+
+import { renderAccount } from "./account/account.js";
 // --- App state ---
 let activeTab = "home";
 
@@ -90,6 +112,11 @@ function renderShell() {
         <img src="/icons/icon-192.png" class="topbar-logo" />
         <h1>Tumya</h1>
       </div>
+
+      <button id="cart-button" class="cart-button">
+        🛒
+        <span id="cart-count" class="cart-count">0</span>
+      </button>
     </div>
     <div id="view" class="container"></div>
     <div class="tabbar">
@@ -100,8 +127,14 @@ function renderShell() {
     </div>
   `;
   document
-    .querySelectorAll(".tabbar button")
-    .forEach((b) => b.addEventListener("click", () => goto(b.dataset.tab)));
+  .querySelectorAll(".tabbar button")
+  .forEach((b) => b.addEventListener("click", () => goto(b.dataset.tab)));
+
+  document
+    .getElementById("cart-button")
+    .addEventListener("click", renderCartPage);
+
+  updateCartBadge();
 }
 
 export async function goto(tab) {

@@ -222,10 +222,11 @@ label:first-child {
   top: 0;
   z-index: 20;
   height: 62px;
-  padding: 0 16px;
+  padding: 14px 18px;
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
+  align-items: center;
   background: rgba(255, 250, 245, 0.88);
   backdrop-filter: blur(18px);
   border-bottom: 1px solid rgba(241, 223, 207, 0.9);
@@ -1543,3 +1544,38 @@ z-index:2;
 
 }
 
+
+
+/* ===========================
+   Top Cart Button
+=========================== */
+
+.cart-button {
+    position: relative;
+    border: none;
+    background: transparent;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 6px;
+}
+
+.cart-count {
+    position: absolute;
+    top: -4px;
+    right: -6px;
+
+    width: 20px;
+    height: 20px;
+
+    border-radius: 50%;
+
+    background: #f2680a;
+    color: white;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    font-size: 11px;
+    font-weight: 700;
+}

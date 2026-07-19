@@ -14,6 +14,18 @@ export function getCart() {
   return cart;
 }
 
+export function updateCartBadge() {
+  const badge = document.getElementById("cart-count");
+
+  if (!badge) return;
+
+  const totalItems = cart.reduce((sum, item) => sum + item.qty, 0);
+
+  badge.textContent = totalItems;
+
+  badge.style.display = totalItems > 0 ? "flex" : "none";
+}
+
 export function addToCart(itemId) {
 
   const catalogCache = getCatalogCache();
@@ -36,10 +48,9 @@ export function addToCart(itemId) {
   }
 
   renderCartBar();
+  updateCartBadge();
 
   toast(`Added ${productQty} × ${item.name}`);
-
-  closeProduct();
 
 }
 
@@ -114,6 +125,8 @@ async function placeCatalogOrder() {
   try {
     const order = await Api.placeCatalogOrder(items, payment_mode);
     cart = [];
+    updateCartBadge();
+
     const view = document.getElementById("view");
     view.innerHTML = orderPlacedHtml(order);
     document
@@ -141,4 +154,80 @@ function orderPlacedHtml(order) {
       <button class="btn btn-block success-action" id="back-home-btn">Back to shop</button>
     </div>
   `;
+}
+
+export function renderCartPage() {
+  const view = document.getElementById("view");
+
+  if (cart.length === 0) {
+    view.innerHTML = `
+      <div class="empty-state">
+        <h2>Your cart is empty</h2>
+        <p>Add some products to continue shopping.</p>
+
+        <button class="btn btn-block" id="continue-shopping-btn">
+          Continue Shopping
+        </button>
+      </div>
+    `;
+
+    document
+      .getElementById("continue-shopping-btn")
+      .addEventListener("click", () => goto("home"));
+
+    return;
+  }
+
+  const subtotal = cart.reduce(
+    (sum, c) => sum + c.item.price * c.qty,
+    0
+  );
+
+  view.innerHTML = `
+    <h2 class="page-title">Shopping Cart</h2>
+
+    <div class="card">
+
+      ${cart
+        .map(
+          (c) => `
+            <div class="checkout-row">
+              <div>
+                <strong>${escapeHtml(c.item.name)}</strong><br>
+                Qty: ${c.qty}
+              </div>
+
+              <div>
+                ₹${(c.item.price * c.qty).toFixed(2)}
+              </div>
+            </div>
+          `
+        )
+        .join("")}
+
+      <hr>
+
+      <div class="checkout-total-row">
+        <span>Subtotal</span>
+        <span>₹${subtotal.toFixed(2)}</span>
+      </div>
+
+    </div>
+
+    <button class="btn btn-outline btn-block" id="continue-shopping-btn">
+      Continue Shopping
+    </button>
+
+    <button class="btn btn-block" id="checkout-btn">
+      Checkout
+    </button>
+  `;
+
+  document
+    .getElementById("continue-shopping-btn")
+    .addEventListener("click", () => goto("home"));
+
+  document
+    .getElementById("checkout-btn")
+    .addEventListener("click", renderCheckout);
 }
