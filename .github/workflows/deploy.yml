@@ -10,6 +10,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Test TCP Connection
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y netcat-openbsd
+          nc -vz ${{ secrets.HOST }} 22
+
       - name: Deploy to server
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -18,21 +24,4 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
 
           script: |
-            set -e
-
-            cd /var/www/tumya
-
-            echo "Pulling latest code..."
-            git pull origin main
-
-            echo "Installing dependencies..."
-            cd backend
-            npm install
-
-            echo "Restarting Tumya..."
-            pm2 restart tumya
-
-            echo "Saving PM2..."
-            pm2 save
-
-            echo "Deployment complete."
+            echo "Connected successfully"
