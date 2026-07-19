@@ -123,7 +123,6 @@ export async function renderOrders(view) {
     }),
   );
 
-
   document.querySelectorAll("tr.clickable").forEach((tr) =>
     tr.addEventListener("click", () =>
       renderOrderDetail(Number(tr.dataset.id)),
