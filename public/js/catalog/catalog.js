@@ -48,7 +48,7 @@ function itemCard(item) {
     if (item.stock_status === "coming_soon") {
         button = `<button class="btn btn-sm btn-block" data-add="${item.id}" onclick="event.stopPropagation()">Book</button>`;
     } else if (item.stock_status === "in_stock") {
-        button = `<button class="btn btn-sm btn-block" data-add="${item.id}" onclick="event.stopPropagation()">Add</button>`;
+        button = `<button class="btn btn-sm btn-block" data-add="${item.id}" onclick="event.stopPropagation()">Add to Cart</button>`;
     } else {
         button = `<span class="badge badge-muted">Out of stock</span>`;
     }
