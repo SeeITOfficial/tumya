@@ -149,3 +149,4 @@ CREATE TABLE IF NOT EXISTS catalog_bookings (
     FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY(catalog_item_id) REFERENCES catalog_items(id)
 );
+
