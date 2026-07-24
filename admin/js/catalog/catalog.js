@@ -9,16 +9,19 @@ import {
 // --- Catalog management ---
 export async function renderCatalog(view) {
   const items = await AdminApi.getCatalog();
+  const modeRes = await AdminApi.getMarketMode();
+  const marketMode = modeRes.market_mode;
 
   view.innerHTML = `
     <h2>Catalog</h2>
 
-    <button
-      class="btn btn-sm"
-      id="add-item-btn"
-      style="margin-bottom:16px;">
-      + Add Item
-    </button>
+    <div style="display:flex; gap: 16px; margin-bottom: 16px; align-items: center;">
+      <button class="btn btn-sm" id="add-item-btn">+ Add Item</button>
+      <label style="display:flex; align-items:center; gap: 8px;">
+        <input type="checkbox" id="market-mode-toggle" ${marketMode ? 'checked' : ''} />
+        <strong>Market Mode (Allow Bookings)</strong>
+      </label>
+    </div>
 
     ${
       items.length === 0
@@ -136,6 +139,18 @@ export async function renderCatalog(view) {
   document
     .getElementById("add-item-btn")
     .addEventListener("click", () => showCatalogModal());
+
+  document.getElementById("market-mode-toggle").addEventListener("change", async (e) => {
+    e.target.disabled = true;
+    try {
+      await AdminApi.setMarketMode(e.target.checked);
+      toast("Market Mode updated!");
+    } catch (err) {
+      toast("Failed to update Market Mode");
+      e.target.checked = !e.target.checked;
+    }
+    e.target.disabled = false;
+  });
 
   document.querySelectorAll("[data-edit-item]").forEach((b) =>
     b.addEventListener("click", () => {

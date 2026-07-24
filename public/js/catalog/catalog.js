@@ -13,7 +13,20 @@ export function getCatalogCache() {
 }
 
 export async function renderHome(view) {
-    catalogCache = await Api.getCatalog();
+    const [catalog, mode] = await Promise.all([
+        Api.getCatalog(),
+        Api.getMarketMode()
+    ]);
+    
+    if (mode.market_mode) {
+        catalog.forEach(item => {
+            if (item.stock_status === "out_of_stock") {
+                item.stock_status = "coming_soon";
+            }
+        });
+    }
+
+    catalogCache = catalog;
 
     if (catalogCache.length === 0) {
         view.innerHTML = `<div class="empty-state">No items listed yet. Check back soon, or use "Send/Receive" to request anything.</div>`;

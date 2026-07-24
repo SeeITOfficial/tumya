@@ -419,14 +419,11 @@ async function createBookings(order, bookingItems) {
     </h2>
 
     <p>
-
-    Booking IDs
-
+    Tracking Code
     </p>
 
     <div class="badge success-badge">
-
-    ${booking.booking_ids.join(", ")}
+    ${booking.tracking_code}
 
     </div>
 

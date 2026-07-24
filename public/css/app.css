@@ -813,6 +813,53 @@ label:first-child {
   pointer-events: auto;
 }
 
+.order-card-amount {
+  margin-top: 4px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--primary, #e87b2f);
+}
+
+.completed-section-title {
+  margin: 28px 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #27ae60;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.completed-section-title::before {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #27ae6033;
+}
+
+.completed-section-title::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #27ae6033;
+}
+
+.order-card-completed {
+  border: 1.5px solid #27ae6033 !important;
+  background: linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%) !important;
+}
+
+.order-card-completed .order-card-code {
+  color: #27ae60;
+}
+
+.badge-completed {
+  background: #d1fae5 !important;
+  color: #166534 !important;
+}
+
 .btn-cancel-order {
   background: transparent !important;
   border: 1.5px solid #e53e3e !important;

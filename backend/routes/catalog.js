@@ -6,10 +6,40 @@ const path = require("path");
 const { requireAuth, requireAdmin } = require("../lib/auth");
 const ALLOWED_STOCK_STATUS = ["in_stock", "out_of_stock", "coming_soon"];
 const { upload, saveImage } = require("../lib/upload");
+const { generateTrackingCode } = require("../lib/trackingCode");
 // Public: list catalog items
 router.get("/", (req, res) => {
   const items = db.prepare(`SELECT * FROM catalog_items ORDER BY name`).all();
   res.json(items);
+});
+
+// Public: get market mode
+router.get("/market_mode", (req, res) => {
+  const setting = db.prepare("SELECT value FROM global_settings WHERE key = 'market_mode'").get();
+  res.json({ market_mode: setting?.value === 'true' });
+});
+
+// Admin: toggle market mode
+router.post("/market_mode", requireAuth, requireAdmin, async (req, res) => {
+  const { market_mode } = req.body;
+  db.prepare(`
+    INSERT INTO global_settings (key, value) VALUES ('market_mode', ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `).run(market_mode ? 'true' : 'false');
+  
+  if (market_mode) {
+    const { notifyCustomer } = require("../lib/push");
+    const users = db.prepare("SELECT DISTINCT customer_id FROM push_subscriptions").all();
+    for (const u of users) {
+      notifyCustomer(u.customer_id, {
+        title: "🛒 Market Mode Active!",
+        body: "We are currently sourcing items! You can now book out-of-stock items in the catalog.",
+        url: "/"
+      }).catch(err => console.error(err));
+    }
+  }
+
+  res.json({ success: true, market_mode });
 });
 
 // Admin: create item
@@ -180,62 +210,47 @@ router.delete("/:id", requireAuth, requireAdmin, (req, res) => {
 });
 
 
-// Customer: create bookings
+// Customer: create bookings (now acts as an order)
 router.post("/bookings", requireAuth, (req, res) => {
   const { items } = req.body;
 
   if (!Array.isArray(items) || items.length === 0) {
-    return res.status(400).json({
-      error: "No booking items supplied.",
-    });
+    return res.status(400).json({ error: "No booking items supplied." });
   }
 
-  const insertBooking = db.prepare(`
-    INSERT INTO catalog_bookings
-    (
-      user_id,
-      catalog_item_id,
-      qty
-    )
-    VALUES (?, ?, ?)
-  `);
+  let catalogRows;
+  try {
+    catalogRows = items.map((i) => {
+      const item = db.prepare(`SELECT * FROM catalog_items WHERE id = ?`).get(i.catalog_item_id);
+      if (!item) throw new Error(`Catalog item ${i.catalog_item_id} not found`);
+      return { item, qty: i.qty };
+    });
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
 
-  const createdBookings = [];
-
-  const createBookings = db.transaction(() => {
-
-    for (const item of items) {
-
-      const result = insertBooking.run(
-        req.user.id,
-        item.catalog_item_id,
-        item.qty
-      );
-
-      createdBookings.push(result.lastInsertRowid);
-
-    }
-
-  });
+  const total = catalogRows.reduce((sum, r) => sum + r.item.price * r.qty, 0);
+  const trackingCode = generateTrackingCode();
 
   try {
+    const orderId = db.transaction(() => {
+      const orderResult = db
+        .prepare(`INSERT INTO orders (customer_id, type, status, total_amount, tracking_code) VALUES (?, 'catalog', 'booking', ?, ?)`)
+        .run(req.user.id, total, trackingCode);
+      const newOrderId = orderResult.lastInsertRowid;
 
-    createBookings();
+      const insertItem = db.prepare(`INSERT INTO order_items (order_id, catalog_item_id, qty, unit_price) VALUES (?, ?, ?, ?)`);
+      for (const r of catalogRows) insertItem.run(newOrderId, r.item.id, r.qty, r.item.price);
 
-    res.status(201).json({
-      success: true,
-      booking_ids: createdBookings,
-      bookings_created: createdBookings.length,
-    });
+      db.prepare(`INSERT INTO status_history (order_id, status, note) VALUES (?, 'booking', 'Booking Created')`).run(newOrderId);
 
+      return newOrderId;
+    })();
+
+    res.status(201).json({ success: true, tracking_code: trackingCode, order_id: orderId });
   } catch (err) {
-
     console.error(err);
-
-    res.status(500).json({
-      error: "Failed to create booking.",
-    });
-
+    res.status(500).json({ error: "Failed to create booking." });
   }
 });
 
@@ -258,35 +273,35 @@ function deleteCatalogImage(imagePath) {
   });
 }
 
-// Admin: list all catalog bookings
-router.get("/bookings", requireAuth, requireAdmin, (req, res) => {
+// Admin: confirm booking and convert to order
+router.post("/bookings/:id/confirm", requireAuth, requireAdmin, (req, res) => {
+  const orderId = req.params.id;
+  const { notifyCustomer } = require("../lib/push");
 
-  const bookings = db.prepare(`
-    SELECT
-      cb.id,
-      cb.qty,
-      cb.status,
-      cb.created_at,
+  try {
+    const result = db.transaction(() => {
+      const order = db.prepare("SELECT * FROM orders WHERE id = ?").get(orderId);
+      if (!order) throw new Error("Order not found");
+      if (order.status !== "booking") throw new Error("Order is not a booking");
 
-      u.name AS customer_name,
-      u.phone AS customer_phone,
+      db.prepare("UPDATE orders SET status = 'pending', payment_mode = 'cod_cash' WHERE id = ?").run(orderId);
+      db.prepare(`INSERT INTO status_history (order_id, status, note) VALUES (?, 'pending', 'Booking Confirmed')`).run(orderId);
+      db.prepare(`INSERT INTO payments (order_id, method, amount, status) VALUES (?, 'cod', ?, 'pending')`).run(orderId, order.total_amount);
 
-      ci.name AS product_name,
-      ci.photo_url
+      return { customerId: order.customer_id, trackingCode: order.tracking_code };
+    })();
 
-    FROM catalog_bookings cb
+    notifyCustomer(result.customerId, {
+      title: "✅ Booking Confirmed!",
+      body: `Your booking (${result.trackingCode}) is now an order. Please check your account.`,
+      url: "/account"
+    }).catch(err => console.error(err));
 
-    JOIN users u
-      ON cb.user_id = u.id
-
-    JOIN catalog_items ci
-      ON cb.catalog_item_id = ci.id
-
-    ORDER BY cb.created_at DESC
-  `).all();
-
-  res.json(bookings);
-
+    res.json({ success: true, order_id: orderId });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 module.exports = router;

@@ -35,6 +35,7 @@ export const Api = (() => {
     token, setToken, clearToken, currentUser, setUser,
     identify: (phone, name) => request('/auth/customer/identify', { method: 'POST', body: { phone, name }, auth: false }),
     getCatalog: () => request('/catalog', { auth: false }),
+    getMarketMode: () => request('/catalog/market_mode', { auth: false }),
     getPickupPoints: () => request('/pickup-points', { auth: false }),
     placeCatalogOrder: (items, payment_mode, location) => request('/orders/catalog', { method: 'POST', body: { items, payment_mode, ...location } }),
     createCatalogBookings: (items) =>

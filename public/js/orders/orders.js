@@ -55,8 +55,8 @@ function statusDescription(order) {
   return map[order.status] || formatStatus(order.status);
 }
 
-function orderTypeLabel(type) {
-  return type === "parcel" ? "📦 Parcel" : "🛒 Catalog";
+function orderTypeLabel(order) {
+  return order.type === "parcel" ? "📦 Parcel" : (order.status === "booking" ? "🛒 Booking" : "🛒 Order");
 }
 
 function stepsForOrder(order) {
@@ -88,38 +88,46 @@ export async function renderOrders(view) {
       return;
     }
 
-    container.className = "orders-list";
-    container.innerHTML = orders
-      .map(
-        (order) => {
-          const cancellable = canCancel(order);
-          return `
-      <div class="card order-card" data-track="${escapeHtml(order.tracking_code)}" data-id="${order.id}">
-        <div class="order-card-top">
-          <strong>${orderTypeLabel(order.type)}</strong>
-          <span class="badge">${escapeHtml(formatStatus(order.status))}</span>
-        </div>
-        <div class="order-card-code">${escapeHtml(order.tracking_code)}</div>
-        <div class="order-card-note">${escapeHtml(statusDescription(order))}</div>
-        <div class="order-card-time">${escapeHtml(formatDateTime(order.created_at))}</div>
-        <div class="order-card-actions">
-          <button class="btn btn-sm order-card-action" type="button" data-action="view">
-            View Details
-          </button>
-          ${cancellable
-            ? `<button class="btn btn-sm btn-cancel-order" type="button" data-action="cancel" data-code="${escapeHtml(order.tracking_code)}">
-                Cancel Order
-              </button>`
-            : `<button class="btn btn-sm btn-cancel-disabled" type="button" disabled title="Delivery has started — cannot cancel">
-                Cannot Cancel
-              </button>`
-          }
-        </div>
+    const COMPLETED_STATUSES = new Set(["delivered", "cancelled"]);
+    const active = orders.filter((o) => !COMPLETED_STATUSES.has(o.status));
+    const completed = orders.filter((o) => COMPLETED_STATUSES.has(o.status));
+
+    const renderCard = (order, isCompleted = false) => {
+      const cancellable = canCancel(order);
+      return `
+    <div class="card order-card ${isCompleted ? 'order-card-completed' : ''}" data-track="${escapeHtml(order.tracking_code)}" data-id="${order.id}">
+      <div class="order-card-top">
+        <strong>${orderTypeLabel(order)}</strong>
+        <span class="badge ${isCompleted ? 'badge-completed' : ''}">${escapeHtml(formatStatus(order.status))}</span>
       </div>
-    `;
+      <div class="order-card-code">${escapeHtml(order.tracking_code)}</div>
+      ${order.total_amount != null ? `<div class="order-card-amount">₹${Number(order.total_amount).toFixed(2)}</div>` : ''}
+      <div class="order-card-note">${escapeHtml(statusDescription(order))}</div>
+      <div class="order-card-time">${escapeHtml(formatDateTime(order.created_at))}</div>
+      <div class="order-card-actions">
+        <button class="btn btn-sm order-card-action" type="button" data-action="view">
+          View Details
+        </button>
+        ${cancellable
+          ? `<button class="btn btn-sm btn-cancel-order" type="button" data-action="cancel" data-code="${escapeHtml(order.tracking_code)}">
+              Cancel Order
+            </button>`
+          : `<button class="btn btn-sm btn-cancel-disabled" type="button" disabled title="Delivery has started — cannot cancel">
+              Cannot Cancel
+            </button>`
         }
-      )
-      .join("");
+      </div>
+    </div>
+  `;
+    };
+
+    container.className = "orders-list";
+    container.innerHTML =
+      active.map((o) => renderCard(o, false)).join("") +
+      (completed.length
+        ? `<div class="completed-section-title">Completed Orders</div>` +
+          completed.map((o) => renderCard(o, true)).join("")
+        : "");
 
     // View details click
     container.querySelectorAll("[data-action='view']").forEach((btn) => {
@@ -197,7 +205,7 @@ export async function openOrderDetail(code = null) {
           <span class="badge">${escapeHtml(order.tracking_code)}</span>
           <span class="track-status">${escapeHtml(formatStatus(order.status))}</span>
         </div>
-        <div class="order-detail-type">${orderTypeLabel(order.type)}</div>
+        <div class="order-detail-type">${orderTypeLabel(order)}</div>
         ${
           order.total_amount != null
             ? `<div class="order-detail-total">Total: ₹${Number(order.total_amount).toFixed(2)}</div>`
@@ -341,7 +349,7 @@ function catalogBlock(items) {
         .map(
           (i) => `
         <div class="detail-row">
-          <span>Item #${i.catalog_item_id} × ${i.qty}</span>
+          <span>${escapeHtml(i.item_name || `Item #${i.catalog_item_id}`)} × ${i.qty}</span>
           <strong>₹${Number(i.unit_price).toFixed(2)}</strong>
         </div>
       `,

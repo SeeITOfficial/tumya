@@ -4,6 +4,7 @@ import { toast, escapeHtml } from "../shared/utils.js";
 
 export const STATUS_FILTERS = [
   "",
+  "booking",
   "pending_quote",
   "quoted",
   "payment_pending",
@@ -166,7 +167,7 @@ export async function renderOrderDetail(id) {
         <h2 class="hero-title">
             ${order.type === "parcel"
                 ? "📦 Parcel"
-                : "🛒 Catalog Order"}
+                : (order.status === "booking" ? "🛒 Booking" : "🛒 Order")}
         </h2>
 
         <div class="hero-customer">
@@ -716,6 +717,11 @@ function nextActionButton(order) {
   if (order.type === "catalog") {
 
     switch (order.status) {
+      
+      case "booking":
+        return `<button class="btn btn-sm btn-block" onclick="event.stopPropagation(); confirmBookingAction(${order.id})">
+          Confirm Order
+        </button>`;
 
       case "pending":
         return `<button class="btn btn-sm btn-block" onclick="advanceOrder(${order.id}, 'confirmed')">
@@ -763,4 +769,15 @@ function openOrder(id){
 
 window.openOrder = openOrder;
 
+async function confirmBookingAction(id) {
+  try {
+    await AdminApi.confirmBooking(id);
+    toast("Booking confirmed!");
+    goto("orders");
+  } catch (err) {
+    toast("Failed to confirm booking: " + err.message);
+  }
+}
+
 window.advanceOrder = advanceOrder;
+window.confirmBookingAction = confirmBookingAction;

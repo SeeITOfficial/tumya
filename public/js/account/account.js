@@ -29,7 +29,7 @@ export async function renderAccount(view) {
             <span class="order-item-status">${o.status.replace(/_/g, " ")}</span>
           </div>
           <div class="order-item-meta">
-            ${o.type === "catalog" ? "Catalog order" : "Parcel"} · ${new Date(o.created_at).toLocaleDateString()}
+            ${o.type === "parcel" ? "Parcel" : (o.status === "booking" ? "Booking" : "Order")} · ${new Date(o.created_at).toLocaleDateString()}
           </div>
         </div>
       `,

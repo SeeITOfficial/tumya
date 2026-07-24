@@ -73,7 +73,12 @@ router.get('/track/:trackingCode', (req, res) => {
 
   const detail = { order, history };
   if (order.type === 'catalog') {
-    detail.items = db.prepare(`SELECT * FROM order_items WHERE order_id = ?`).all(order.id);
+    detail.items = db.prepare(`
+      SELECT oi.*, ci.name AS item_name
+      FROM order_items oi
+      LEFT JOIN catalog_items ci ON oi.catalog_item_id = ci.id
+      WHERE oi.order_id = ?
+    `).all(order.id);
   } else {
     detail.parcel = db.prepare(`SELECT * FROM parcels WHERE order_id = ?`).get(order.id);
   }
