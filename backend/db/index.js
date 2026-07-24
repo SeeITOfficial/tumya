@@ -26,6 +26,9 @@ function ensureColumn(tableName, columnName, definition) {
 }
 
 ensureColumn("catalog_items", "photo_url_2", "TEXT");
+ensureColumn("orders", "delivery_lat", "REAL");
+ensureColumn("orders", "delivery_lng", "REAL");
+ensureColumn("orders", "delivery_address_text", "TEXT");
 
 // node:sqlite has no built-in transaction() wrapper like better-sqlite3
 db.transaction = (fn) => {

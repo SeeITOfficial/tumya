@@ -33,7 +33,7 @@ function validateHandler(prefix, body) {
 }
 
 // Customer: submit a parcel (send or receive)
-router.post("/", requireAuth, upload.single("photo"), async (req, res) => {  
+router.post("/", requireAuth, async (req, res) => {
   const b = req.body;
   if (!b.direction || !['india_to_uganda', 'uganda_to_india'].includes(b.direction)) {
     return res.status(400).json({ error: 'direction must be india_to_uganda or uganda_to_india' });
@@ -52,14 +52,8 @@ router.post("/", requireAuth, upload.single("photo"), async (req, res) => {
 
   const trackingCode = generateTrackingCode();
 
-  let photo_url = null;
-  try {
-    if (req.file) {
-      photo_url = await saveImage(req.file, "parcels");
-    }
-  } catch (err) {
-    return res.status(400).json({ error: err.message || "Unable to save photo" });
-  }
+  // photo_url is not supported from the mobile wizard (no file upload)
+  const photo_url = null;
 
   const tx = db.transaction(() => {
     const orderResult = db

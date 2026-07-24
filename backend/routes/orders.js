@@ -8,10 +8,13 @@ const { createCatalogPayment, buildUpiLink, markCodCashPaid, verifyPayment, subm
 
 // Customer: place a catalog order
 router.post('/catalog', requireAuth, (req, res) => {
-  const { items, payment_mode } = req.body; // items: [{ catalog_item_id, qty }]
+  const { items, payment_mode, delivery_lat, delivery_lng, delivery_address_text } = req.body; // items: [{ catalog_item_id, qty }]
   if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'items required' });
   if (!['cod_cash', 'cod_upi_scan'].includes(payment_mode)) {
     return res.status(400).json({ error: 'payment_mode must be cod_cash or cod_upi_scan' });
+  }
+  if (delivery_lat == null && delivery_lng == null && !delivery_address_text) {
+    return res.status(400).json({ error: 'delivery location required' });
   }
 
   let catalogRows;
@@ -35,9 +38,9 @@ router.post('/catalog', requireAuth, (req, res) => {
     const tx = db.transaction(() => {
       const orderResult = db
         .prepare(
-          `INSERT INTO orders (customer_id, type, status, payment_mode, total_amount, tracking_code) VALUES (?, 'catalog', 'pending', ?, ?, ?)`
+          `INSERT INTO orders (customer_id, type, status, payment_mode, total_amount, tracking_code, delivery_lat, delivery_lng, delivery_address_text) VALUES (?, 'catalog', 'pending', ?, ?, ?, ?, ?, ?)`
         )
-        .run(req.user.id, payment_mode, total, trackingCode);
+        .run(req.user.id, payment_mode, total, trackingCode, delivery_lat ?? null, delivery_lng ?? null, delivery_address_text || null);
       const newOrderId = orderResult.lastInsertRowid;
 
       const insertItem = db.prepare(
@@ -188,6 +191,36 @@ router.post('/:id/payment/confirm', requireAuth, requireAdmin, (req, res) => {
     res.json(payment);
   } catch (err) {
     res.status(400).json({ error: err.message });
+  }
+});
+
+// Customer: cancel their own order (only if delivery hasn't started)
+router.delete('/cancel/:trackingCode', requireAuth, (req, res) => {
+  const order = db.prepare(`SELECT * FROM orders WHERE tracking_code = ?`).get(req.params.trackingCode);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+
+  // Must belong to this customer
+  if (order.customer_id !== req.user.id) {
+    return res.status(403).json({ error: 'Not your order' });
+  }
+
+  // Lock cancellation once delivery has started
+  const nonCancellableStatuses = ['out_for_delivery', 'delivered', 'in_transit'];
+  if (nonCancellableStatuses.includes(order.status)) {
+    return res.status(403).json({ error: 'Cannot cancel — delivery has already started' });
+  }
+
+  try {
+    const tx = db.transaction(() => {
+      db.prepare(`DELETE FROM status_history WHERE order_id = ?`).run(order.id);
+      db.prepare(`DELETE FROM order_items WHERE order_id = ?`).run(order.id);
+      db.prepare(`DELETE FROM payments WHERE order_id = ?`).run(order.id);
+      db.prepare(`DELETE FROM orders WHERE id = ?`).run(order.id);
+    });
+    tx();
+    res.json({ success: true, cancelled: order.tracking_code });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to cancel order', detail: err.message });
   }
 });
 
