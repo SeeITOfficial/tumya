@@ -13,6 +13,19 @@ let cart = {
   bookingItems: [],
 };
 
+try {
+  const saved = localStorage.getItem("tumya_cart");
+  if (saved) cart = JSON.parse(saved);
+} catch (e) {
+  console.error("Failed to load cart", e);
+}
+
+function saveCart() {
+  localStorage.setItem("tumya_cart", JSON.stringify(cart));
+}
+
+let checkoutLocation = { delivery_lat: null, delivery_lng: null, delivery_address_text: "" };
+
 export function getCart() {
   return cart;
 }
@@ -40,9 +53,13 @@ export function addToCart(itemId) {
     return;
   }
 
+  if (item.stock_status === "out_of_stock") {
+    toast("This item is currently out of stock.", true);
+    return;
+  }
+
   const productQty = getProductQty();
 
-  // Decide which cart section to use
   const targetCart =
     item.stock_status === "coming_soon"
       ? cart.bookingItems
@@ -59,6 +76,7 @@ export function addToCart(itemId) {
     });
   }
 
+  saveCart();
   renderCartBar();
   updateCartBadge();
 
@@ -125,19 +143,25 @@ export function renderCartBar() {
 
 function renderCheckout() {
   const view = document.getElementById("view");
-    const total = cart.orderItems.reduce(
-      (s, c) => s + c.item.price * c.qty,
-      0
-    );
-    view.innerHTML = `
+  const total = cart.orderItems.reduce(
+    (s, c) => s + c.item.price * c.qty,
+    0
+  );
+
+  checkoutLocation = { delivery_lat: null, delivery_lng: null, delivery_address_text: "" };
+
+  view.innerHTML = `
     <h2 class="page-title">Checkout</h2>
-    <div class="card checkout-summary">
+    <div class="card cart-summary-card checkout-summary">
       ${cart.orderItems
         .map(
           (c) => `
         <div class="checkout-row">
-          <span class="checkout-item-name">${escapeHtml(c.item.name)} × ${c.qty}</span>
-          <span class="checkout-item-price">₹${(c.item.price * c.qty).toFixed(2)}</span>
+          <div class="checkout-item-details">
+            <div class="checkout-item-name">${escapeHtml(c.item.name)}</div>
+            <div class="checkout-item-qty">Qty: ${c.qty}</div>
+          </div>
+          <div class="checkout-item-price">₹${(c.item.price * c.qty).toFixed(2)}</div>
         </div>
       `,
         )
@@ -147,7 +171,17 @@ function renderCheckout() {
       </div>
     </div>
 
-    <label>Payment method</label>
+    <h3 style="margin-top:24px; font-size: 16px;">Delivery Location</h3>
+    <div class="card location-picker" style="padding: 16px; border: 1.5px solid rgba(242,104,10,0.15);">
+      <button type="button" class="btn btn-outline btn-block" id="use-current-location-btn">
+        📍 Use current location
+      </button>
+      <div id="location-status" class="form-help" style="margin-top:8px;"></div>
+      <div style="margin: 16px 0 8px; font-weight: 600; font-size: 13px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.5px;">Or type an address / landmark</div>
+      <textarea id="delivery-address-text" placeholder="e.g. Plot 14, Ntinda Road, near Shell station" rows="3" style="resize: none; padding: 12px; border-radius: 12px; border: 1.5px solid rgba(241, 223, 207, 0.8); background: #fdfaf7; width: 100%; box-sizing: border-box; font-family: inherit; font-size: 15px; transition: border-color 0.2s ease;"></textarea>
+    </div>
+
+    <h3 style="margin-top:24px; font-size: 16px;">Payment Method</h3>
     <div class="payment-options">
       <label class="card payment-option">
         <input type="radio" name="pm" value="cod_cash" checked /> Cash on delivery
@@ -157,20 +191,98 @@ function renderCheckout() {
       </label>
     </div>
 
-    <button class="btn btn-block form-action-primary" id="place-order-btn">Place order</button>
-    <button class="btn btn-outline btn-block form-action-secondary" id="cancel-checkout-btn">Back</button>
+    <div class="cart-actions">
+      <button class="btn btn-block checkout-pulse" id="place-order-btn">Place Order &rarr;</button>
+      <button class="btn btn-outline btn-block" id="cancel-checkout-btn">Back to Cart</button>
+    </div>
   `;
+
   document
     .getElementById("cancel-checkout-btn")
     .addEventListener("click", () => goto("home"));
   document
     .getElementById("place-order-btn")
     .addEventListener("click", placeCatalogOrder);
+
+  document
+    .getElementById("delivery-address-text")
+    .addEventListener("input", (e) => {
+      checkoutLocation.delivery_address_text = e.target.value;
+    });
+
+  document
+    .getElementById("use-current-location-btn")
+    .addEventListener("click", grabCurrentLocation);
+}
+
+function grabCurrentLocation() {
+  const statusEl = document.getElementById("location-status");
+  if (!navigator.geolocation) {
+    statusEl.textContent = "Geolocation not supported on this device.";
+    return;
+  }
+  if (!window.isSecureContext) {
+    statusEl.textContent = "Location needs a secure (https) connection. Type your address instead.";
+    return;
+  }
+  statusEl.textContent = "Getting your location...";
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const { latitude, longitude, accuracy } = pos.coords;
+      const isImprecise = accuracy > 5000;
+      
+      checkoutLocation.delivery_lat = latitude;
+      checkoutLocation.delivery_lng = longitude;
+      
+      if (isImprecise) {
+        statusEl.innerHTML = `⚠️ Location is imprecise (±${Math.round(accuracy / 1000)}km). Fetching approximate area...`;
+      } else {
+        statusEl.textContent = `✅ Location captured (±${Math.round(accuracy)}m accuracy). Fetching address...`;
+      }
+      
+      fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.display_name) {
+            const input = document.getElementById("delivery-address-text");
+            if (input) {
+              input.value = data.display_name;
+              checkoutLocation.delivery_address_text = data.display_name;
+            }
+            if (isImprecise) {
+              statusEl.innerHTML = `⚠️ Captured: ${data.address.city || data.address.town || data.address.state || "Approximate area"}. <strong>Please verify/edit the address below!</strong>`;
+            } else {
+              statusEl.textContent = `✅ Location captured (${data.address.city || data.address.town || data.address.suburb || "Found"})`;
+            }
+          } else {
+             statusEl.textContent = isImprecise ? `⚠️ Location is imprecise (±${Math.round(accuracy / 1000)}km). Please type your address.` : `✅ Location captured (±${Math.round(accuracy)}m accuracy)`;
+          }
+        })
+        .catch(e => {
+          statusEl.textContent = isImprecise ? `⚠️ Location is imprecise (±${Math.round(accuracy / 1000)}km). Please type your address.` : `✅ Location captured (±${Math.round(accuracy)}m accuracy)`;
+        });
+    },
+    (err) => {
+      let msg = "Couldn't get location. Type an address instead.";
+      if (err.code === err.PERMISSION_DENIED) msg = "Location access denied. Please allow it in browser settings, or type your address.";
+      else if (err.code === err.POSITION_UNAVAILABLE) msg = "Location unavailable. Type your address instead.";
+      else if (err.code === err.TIMEOUT) msg = "Location timed out. Type your address instead.";
+      statusEl.textContent = msg;
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+  );
 }
 
 async function placeCatalogOrder() {
   const payment_mode =
     document.querySelector('input[name="pm"]:checked').value;
+
+  const hasCoords = checkoutLocation.delivery_lat != null && checkoutLocation.delivery_lng != null;
+  const hasText = checkoutLocation.delivery_address_text.trim().length > 0;
+  if (!hasCoords && !hasText) {
+    toast("Add a delivery location — use current location or type an address.", true);
+    return;
+  }
 
   const items = cart.orderItems.map((c) => ({
     catalog_item_id: c.item.id,
@@ -178,13 +290,13 @@ async function placeCatalogOrder() {
   }));
 
   try {
-    const order = await Api.placeCatalogOrder(items, payment_mode);
+    const order = await Api.placeCatalogOrder(items, payment_mode, checkoutLocation);
 
-    // Save booking items before clearing the cart
     const bookingItems = [...cart.bookingItems];
 
     cart.orderItems = [];
     cart.bookingItems = [];
+    saveCart();
 
     updateCartBadge();
 
@@ -234,7 +346,7 @@ function bookingPromptHtml(order, bookingItems) {
       </h2>
 
       <p>
-        Tracking code:
+        Order ID:
       </p>
 
       <div class="badge success-badge">
@@ -340,6 +452,7 @@ async function createBookings(order, bookingItems) {
     `;
 
     cart.bookingItems = [];
+    saveCart();
     updateCartBadge();  
     
     document
@@ -360,7 +473,7 @@ function orderPlacedHtml(order) {
     <div class="card success-card">
       <div class="success-icon">📦</div>
       <h2 class="success-title">Order placed</h2>
-      <p class="success-copy">Your tracking code:</p>
+      <p class="success-copy">Your Order ID:</p>
       <div class="badge success-badge">${order.tracking_code}</div>
       <p class="success-note">
         ${
@@ -412,27 +525,19 @@ export function renderCartPage() {
         ? `
       <h3>Ready to Order</h3>
 
-      <div class="card">
+      <div class="card cart-summary-card">
 
         ${orderItems
           .map(
             (c) => `
               <div class="checkout-row">
-
-                <div>
-
-                  <strong>${escapeHtml(c.item.name)}</strong><br>
-
-                  Qty: ${c.qty}
-
+                <div class="checkout-item-details">
+                  <div class="checkout-item-name">${escapeHtml(c.item.name)}</div>
+                  <div class="checkout-item-qty">Qty: ${c.qty}</div>
                 </div>
-
-                <div>
-
+                <div class="checkout-item-price">
                   ₹${(c.item.price * c.qty).toFixed(2)}
-
                 </div>
-
               </div>
             `
           )
@@ -458,27 +563,19 @@ export function renderCartPage() {
         ? `
       <h3 style="margin-top:24px;">Book for Next Shipment</h3>
 
-      <div class="card">
+      <div class="card cart-summary-card">
 
         ${bookingItems
           .map(
             (c) => `
               <div class="checkout-row">
-
-                <div>
-
-                  <strong>${escapeHtml(c.item.name)}</strong><br>
-
-                  Qty: ${c.qty}
-
+                <div class="checkout-item-details">
+                  <div class="checkout-item-name">${escapeHtml(c.item.name)}</div>
+                  <div class="checkout-item-qty">Qty: ${c.qty}</div>
                 </div>
-
-                <div>
-
+                <div class="checkout-item-price">
                   Booking
-
                 </div>
-
               </div>
             `
           )
@@ -496,25 +593,26 @@ export function renderCartPage() {
         : ""
     }
 
-    <button class="btn btn-outline btn-block" id="continue-shopping-btn">
-      Continue Shopping
-    </button>
-
-    ${
-      orderItems.length
-        ? `
-          <button class="btn btn-block" id="checkout-btn">
-            Checkout
-          </button>
-          `
-        : bookingItems.length
+    <div class="cart-actions">
+      ${
+        orderItems.length
           ? `
-          <button class="btn btn-block" id="booking-btn">
-            Create Booking
-          </button>
-          `
+            <button class="btn btn-block checkout-pulse" id="checkout-btn">
+              Checkout &rarr;
+            </button>
+            `
+          : bookingItems.length
+            ? `
+            <button class="btn btn-block checkout-pulse" id="booking-btn">
+              Create Booking &rarr;
+            </button>
+            `
           : ""
-    }
+      }
+      <button class="btn btn-outline btn-block" id="continue-shopping-btn">
+        Continue Shopping
+      </button>
+    </div>
   `;
 
   document

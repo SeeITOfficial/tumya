@@ -36,7 +36,7 @@ export const Api = (() => {
     identify: (phone, name) => request('/auth/customer/identify', { method: 'POST', body: { phone, name }, auth: false }),
     getCatalog: () => request('/catalog', { auth: false }),
     getPickupPoints: () => request('/pickup-points', { auth: false }),
-    placeCatalogOrder: (items, payment_mode) => request('/orders/catalog', { method: 'POST', body: { items, payment_mode } }),
+    placeCatalogOrder: (items, payment_mode, location) => request('/orders/catalog', { method: 'POST', body: { items, payment_mode, ...location } }),
     createCatalogBookings: (items) =>
       request("/catalog/bookings", {
         method: "POST",
@@ -49,5 +49,6 @@ export const Api = (() => {
     submitParcelReference: (orderId, reference_number) => request(`/parcels/${orderId}/payment/reference`, { method: 'POST', body: { reference_number } }),
     vapidKey: () => request('/push/vapid-public-key', { auth: false }),
     pushSubscribe: (sub) => request('/push/subscribe', { method: 'POST', body: sub }),
+    cancelOrder: (trackingCode) => request(`/orders/cancel/${trackingCode}`, { method: 'DELETE' }),
   };
 })();

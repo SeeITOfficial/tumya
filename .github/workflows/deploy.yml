@@ -26,7 +26,9 @@ jobs:
             cd /var/www/tumya
 
             echo "Pulling latest code..."
-            git pull origin main
+            git fetch origin
+            git reset --hard origin/main
+            git clean -fd
 
             echo "Installing dependencies..."
             cd backend

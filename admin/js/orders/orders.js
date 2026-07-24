@@ -234,6 +234,38 @@ export async function renderOrderDetail(id) {
   wireOrderDetailActions(order, parcel, payment);
 }
 
+function locationBlock(order) {
+  if (order.delivery_lat == null && !order.delivery_address_text) return "";
+
+  const hasCoords = order.delivery_lat != null && order.delivery_lng != null;
+  const mapsUrl = hasCoords
+    ? `https://www.google.com/maps?q=${order.delivery_lat},${order.delivery_lng}`
+    : null;
+
+  return `
+    <div class="order-section">
+      <h3>📍 Delivery Location</h3>
+      ${order.delivery_address_text ? `
+        <div class="detail-row">
+          <span>Address</span>
+          <strong>${escapeHtml(order.delivery_address_text)}</strong>
+        </div>
+      ` : ""}
+      ${hasCoords ? `
+        <div class="detail-row">
+          <span>GPS Pin</span>
+          <a href="${mapsUrl}" target="_blank" rel="noopener" class="btn btn-sm">Open in Google Maps</a>
+        </div>
+      ` : `
+        <div class="detail-row">
+          <span>GPS Pin</span>
+          <span style="color:var(--ink-soft);">Not captured — address text only</span>
+        </div>
+      `}
+    </div>
+  `;
+}
+
 function catalogOrderDetailHtml(order, items, payment) {
   return `
     <div class="card" style="padding:16px; margin-bottom:16px;">
@@ -275,6 +307,7 @@ function catalogOrderDetailHtml(order, items, payment) {
         ${catalogNextAction(order)}
       </div>
     </div>
+    ${locationBlock(order)}
   `;
 }
 

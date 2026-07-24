@@ -113,9 +113,22 @@ function renderCollectLocationStep(view, title) {
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        parcelWizard.data.pickup_address = `${pos.coords.latitude}, ${pos.coords.longitude}`;
-        parcelWizard.step += 1;
-        renderParcelStep(view);
+        const { latitude, longitude, accuracy } = pos.coords;
+        if (accuracy > 5000) {
+          // City-level accuracy — likely IP-based, not GPS. Warn the user.
+          toast(
+            `⚠️ Location is only accurate to ~${Math.round(accuracy / 1000)}km. This may be your city, not your exact location. Please use "Enter Manually" for a precise address.`,
+            true,
+          );
+          // Save coords anyway so admin sees a rough area
+          parcelWizard.data.pickup_address = `${latitude}, ${longitude}`;
+          parcelWizard.step += 1;
+          renderParcelStep(view);
+        } else {
+          parcelWizard.data.pickup_address = `${latitude}, ${longitude}`;
+          parcelWizard.step += 1;
+          renderParcelStep(view);
+        }
       },
       (err) => {
         let msg = "Couldn't get your location. Please enter it manually instead.";
@@ -710,7 +723,7 @@ export function renderParcelStep(view) {
               <p>Your parcel request has been received We will get in touch with you soon.</p>
 
               <div class="review-card">
-                <div class="review-row"><strong>Tracking Code: </strong><span>${escapeHtml(result.order.tracking_code)}</span></div>
+                <div class="review-row"><strong>Order ID: </strong><span>${escapeHtml(result.order.tracking_code)}</span></div>
               </div>
 
               <button class="btn btn-block" id="trackNowBtn">Track Parcel</button>

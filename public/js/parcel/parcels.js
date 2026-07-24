@@ -89,7 +89,7 @@ export async function submitParcel() {
       <div class="card success-card">
         <div class="success-icon">📮</div>
         <h2 class="success-title">Parcel submitted</h2>
-        <p class="success-copy">Your tracking code:</p>
+        <p class="success-copy">Your Order ID:</p>
         <div class="badge success-badge">${order.tracking_code}</div>
         <p class="success-note">Our team will weigh it and send you a quote shortly.</p>
         <button class="btn btn-block success-action" id="back-home-btn2">Back to shop</button>

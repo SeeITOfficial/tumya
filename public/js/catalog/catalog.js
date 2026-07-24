@@ -109,6 +109,7 @@ export function openProduct(id) {
                         <div class="product-price">₹${item.price}</div>
                         <div class="product-unit">per ${escapeHtml(item.unit)}</div>
                         <p class="product-description">Fresh quality product supplied by Tumya.</p>
+                        ${item.stock_status === "out_of_stock" ? "" : `
                         <div class="qty-section">
                                 <span>Quantity</span>
                                 <div class="qty-controls">
@@ -117,11 +118,16 @@ export function openProduct(id) {
                                         <button class="qty-btn" onclick="changeQty(1,event)">+</button>
                                 </div>
                         </div>
+                        `}
                 </div>
                 <div class="product-actions">
-                        <button class="btn btn-block" onclick="addToCart(${item.id})">
-                                ${item.stock_status==="coming_soon" ? "Book Now" : "Add to Cart"}
-                        </button>
+                        ${
+                            item.stock_status === "out_of_stock"
+                                ? `<button class="btn btn-block" disabled>Out of Stock</button>`
+                                : `<button class="btn btn-block" onclick="addToCart(${item.id})">
+                                      ${item.stock_status === "coming_soon" ? "Book Now" : "Add to Cart"}
+                                   </button>`
+                        }
                 </div>
         </div>
 </div>

@@ -1,5 +1,6 @@
 import { Api } from "../api.js";
 import { escapeHtml } from "../shared/utils.js";
+import { toast } from "../shared/ui.js";
 
 const PARCEL_STEPS = [
   "pending_quote",
@@ -13,10 +14,16 @@ const PARCEL_STEPS = [
 
 const CATALOG_STEPS = [
   "confirmed",
-  "in_transit",
   "out_for_delivery",
   "delivered",
 ];
+
+// Statuses where cancellation is no longer allowed
+const NON_CANCELLABLE = new Set(["out_for_delivery", "in_transit", "delivered"]);
+
+function canCancel(order) {
+  return !NON_CANCELLABLE.has(order.status);
+}
 
 function formatStatus(status) {
   return String(status || "").replace(/_/g, " ");
@@ -84,8 +91,10 @@ export async function renderOrders(view) {
     container.className = "orders-list";
     container.innerHTML = orders
       .map(
-        (order) => `
-      <div class="card order-card" data-track="${escapeHtml(order.tracking_code)}">
+        (order) => {
+          const cancellable = canCancel(order);
+          return `
+      <div class="card order-card" data-track="${escapeHtml(order.tracking_code)}" data-id="${order.id}">
         <div class="order-card-top">
           <strong>${orderTypeLabel(order.type)}</strong>
           <span class="badge">${escapeHtml(formatStatus(order.status))}</span>
@@ -93,21 +102,68 @@ export async function renderOrders(view) {
         <div class="order-card-code">${escapeHtml(order.tracking_code)}</div>
         <div class="order-card-note">${escapeHtml(statusDescription(order))}</div>
         <div class="order-card-time">${escapeHtml(formatDateTime(order.created_at))}</div>
-        <button class="btn btn-sm order-card-action" type="button">View Details</button>
+        <div class="order-card-actions">
+          <button class="btn btn-sm order-card-action" type="button" data-action="view">
+            View Details
+          </button>
+          ${cancellable
+            ? `<button class="btn btn-sm btn-cancel-order" type="button" data-action="cancel" data-code="${escapeHtml(order.tracking_code)}">
+                Cancel Order
+              </button>`
+            : `<button class="btn btn-sm btn-cancel-disabled" type="button" disabled title="Delivery has started — cannot cancel">
+                Cannot Cancel
+              </button>`
+          }
+        </div>
       </div>
-    `,
+    `;
+        }
       )
       .join("");
 
-    container.querySelectorAll("[data-track]").forEach((card) => {
-      card.addEventListener("click", () => {
+    // View details click
+    container.querySelectorAll("[data-action='view']").forEach((btn) => {
+      const card = btn.closest("[data-track]");
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
         history.replaceState(null, "", `/?track=${card.dataset.track}`);
         openOrderDetail(card.dataset.track);
+      });
+    });
+
+    // Cancel click
+    container.querySelectorAll("[data-action='cancel']").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        cancelOrder(btn.dataset.code, btn.closest(".order-card"));
       });
     });
   } catch (err) {
     container.className = "empty-state";
     container.innerHTML = err.message;
+  }
+}
+
+async function cancelOrder(code, cardEl) {
+  const confirmed = window.confirm(`Cancel order ${code}? This cannot be undone.`);
+  if (!confirmed) return;
+
+  try {
+    await Api.cancelOrder(code);
+    // Animate card out
+    cardEl.style.transition = "opacity 0.3s ease, transform 0.3s ease, max-height 0.4s ease, margin 0.4s ease, padding 0.4s ease";
+    cardEl.style.opacity = "0";
+    cardEl.style.transform = "scale(0.96)";
+    cardEl.style.maxHeight = cardEl.offsetHeight + "px";
+    setTimeout(() => {
+      cardEl.style.maxHeight = "0";
+      cardEl.style.margin = "0";
+      cardEl.style.padding = "0";
+    }, 300);
+    setTimeout(() => cardEl.remove(), 700);
+    toast(`Order ${code} cancelled`);
+  } catch (err) {
+    toast(err.message || "Failed to cancel order");
   }
 }
 
