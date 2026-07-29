@@ -4,12 +4,14 @@
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS users (
-  id            INTEGER PRIMARY KEY AUTOINCREMENT,
-  name          TEXT NOT NULL,
-  phone         TEXT NOT NULL UNIQUE,
-  password_hash TEXT,                    -- set for admins only; customers identify by phone for v1
-  role          TEXT NOT NULL CHECK (role IN ('customer','admin')) DEFAULT 'customer',
-  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  name             TEXT NOT NULL,
+  email            TEXT UNIQUE,
+  email_verified   INTEGER NOT NULL DEFAULT 0,
+  phone            TEXT NOT NULL UNIQUE,
+  password_hash    TEXT,
+  role             TEXT NOT NULL CHECK (role IN ('customer','admin')) DEFAULT 'customer',
+  created_at       TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS pickup_points (
@@ -153,4 +155,15 @@ CREATE TABLE IF NOT EXISTS catalog_bookings (
 CREATE TABLE IF NOT EXISTS global_settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS email_verification_codes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL,
+    name TEXT,
+    phone TEXT,
+    code TEXT NOT NULL,
+    purpose TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
