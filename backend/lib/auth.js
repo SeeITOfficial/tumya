@@ -10,7 +10,7 @@ function signToken(user) {
   return jwt.sign(
     { id: user.id, role: user.role, name: user.name, phone: user.phone },
     JWT_SECRET,
-    { expiresIn: '30d' }
+    { expiresIn: process.env.JWT_EXPIRES || "30d" }
   );
 }
 

@@ -1,7 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const { signToken, verifyPassword } = require('../lib/auth');
+const {
+  signToken,
+  verifyPassword,
+  requireAuth,
+  requireAdmin,
+} = require("../lib/auth");
 const crypto = require('crypto');
 const { sendVerificationCode } = require("../lib/email");
 
@@ -319,7 +324,6 @@ router.post('/verify-login', (req, res) => {
   });
 });
 
-const { requireAuth, requireAdmin } = require('../lib/auth');
 
 // Admin: list all admin accounts (for reassign dropdown)
 router.get('/admins', requireAuth, requireAdmin, (req, res) => {

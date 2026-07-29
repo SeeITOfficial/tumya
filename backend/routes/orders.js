@@ -4,8 +4,12 @@ const db = require('../db');
 const { requireAuth, requireAdmin } = require('../lib/auth');
 const { generateTrackingCode } = require('../lib/trackingCode');
 const { updateStatus } = require('../lib/orderLifecycle');
-const { createCatalogPayment, buildUpiLink, markCodCashPaid, verifyPayment, submitReference } = require('../lib/payments');
-
+const {
+  createCatalogPayment,
+  buildUpiLink,
+  verifyPayment,
+  submitReference,
+} = require("../lib/payments");
 // Customer: place a catalog order
 router.post('/catalog', requireAuth, (req, res) => {
   const { items, payment_mode, delivery_lat, delivery_lng, delivery_address_text } = req.body; // items: [{ catalog_item_id, qty }]
@@ -166,7 +170,7 @@ router.patch('/:id/assign', requireAuth, requireAdmin, (req, res) => {
   res.json(db.prepare(`SELECT * FROM orders WHERE id = ?`).get(req.params.id));
 });
 
-// Admin: advance status (e.g. in_transit, out_for_delivery, delivered)
+// Admin: update order status
 router.patch('/:id/status', requireAuth, requireAdmin, async (req, res) => {
   const { status, note } = req.body;
   try {
@@ -210,7 +214,10 @@ router.delete('/cancel/:trackingCode', requireAuth, (req, res) => {
   }
 
   // Lock cancellation once delivery has started
-  const nonCancellableStatuses = ['out_for_delivery', 'delivered', 'in_transit'];
+  const nonCancellableStatuses =
+    order.type === "catalog"
+      ? ["out_for_delivery", "delivered"]
+      : ["in_transit", "out_for_delivery", "delivered"];
   if (nonCancellableStatuses.includes(order.status)) {
     return res.status(403).json({ error: 'Cannot cancel — delivery has already started' });
   }

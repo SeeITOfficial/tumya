@@ -1,15 +1,17 @@
 require("dotenv").config();
 
-const { sendVerificationCode } = require("./lib/email");
+const { sendOrderPlaced } = require("./lib/email");
 
 (async () => {
   try {
-    await sendVerificationCode(
-      process.env.EMAIL_USER,
-      "123 456"
-    );
+    await sendOrderPlaced({
+      email: "stephseeit@gmail.com",
+      customerName: "Stephen",
+      orderNumber: "TMY-20260729-001",
+      total: "2,450",
+    });
 
-    console.log("✅ Email sent successfully");
+    console.log("✅ Order Placed email sent successfully");
   } catch (err) {
     console.error(err);
   }
