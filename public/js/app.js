@@ -1,5 +1,6 @@
 import { Api } from "./api.js";
 import { setupPush } from "./notifications/notifications.js";
+import { initPwaInstall } from "./shared/pwa-install.js";
 
 import {
   renderHome,
@@ -698,6 +699,12 @@ if (canUseServiceWorker) {
     });
 
 }
+
+// -----------------------------------------------------------------------------
+// PWA Install Prompt
+// -----------------------------------------------------------------------------
+
+initPwaInstall();
 
 // -----------------------------------------------------------------------------
 // Start Application
