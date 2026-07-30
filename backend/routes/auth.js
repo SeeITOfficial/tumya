@@ -141,19 +141,37 @@ router.post('/verify-email', (req, res) => {
 
     db.prepare(`DELETE FROM email_verification_codes WHERE expires_at < ?`).run(new Date().toISOString());
 
-    const record = db.prepare(`
+    // Lookup by email+purpose first so we can track attempts before comparing codes.
+    const otpRecord = db.prepare(`
       SELECT *
       FROM email_verification_codes
       WHERE email = ?
-        AND code = ?
         AND purpose = 'register'
-    `).get(email, code);
+    `).get(email);
 
-    if (!record) {
+    if (!otpRecord) {
       return res.status(400).json({
         error: 'Invalid verification code'
       });
     }
+
+    // Brute-force lockout: max 5 attempts per OTP.
+    if (otpRecord.attempts >= 5) {
+      db.prepare(`DELETE FROM email_verification_codes WHERE id = ?`).run(otpRecord.id);
+      return res.status(429).json({
+        error: 'Too many incorrect attempts. Please request a new verification code.'
+      });
+    }
+
+    if (otpRecord.code !== code) {
+      db.prepare(`UPDATE email_verification_codes SET attempts = attempts + 1 WHERE id = ?`).run(otpRecord.id);
+      return res.status(400).json({
+        error: 'Invalid verification code'
+      });
+    }
+
+    // Code matches — treat as the confirmed record.
+    const record = otpRecord;
 
     const existingUser = db.prepare(`
         SELECT *
@@ -366,19 +384,37 @@ router.post('/verify-login', (req, res) => {
 
     db.prepare(`DELETE FROM email_verification_codes WHERE expires_at < ?`).run(new Date().toISOString());
 
-    const record = db.prepare(`
+    // Lookup by email+purpose first so we can track attempts before comparing codes.
+    const otpRecord = db.prepare(`
       SELECT *
       FROM email_verification_codes
       WHERE email = ?
-        AND code = ?
         AND purpose = 'login'
-    `).get(email, code);
+    `).get(email);
 
-    if (!record) {
+    if (!otpRecord) {
       return res.status(400).json({
         error: 'Invalid verification code'
       });
     }
+
+    // Brute-force lockout: max 5 attempts per OTP.
+    if (otpRecord.attempts >= 5) {
+      db.prepare(`DELETE FROM email_verification_codes WHERE id = ?`).run(otpRecord.id);
+      return res.status(429).json({
+        error: 'Too many incorrect attempts. Please request a new verification code.'
+      });
+    }
+
+    if (otpRecord.code !== code) {
+      db.prepare(`UPDATE email_verification_codes SET attempts = attempts + 1 WHERE id = ?`).run(otpRecord.id);
+      return res.status(400).json({
+        error: 'Invalid verification code'
+      });
+    }
+
+    // Code matches.
+    const record = otpRecord;
 
     const user = db.prepare(`
       SELECT *

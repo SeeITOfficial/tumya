@@ -11,6 +11,7 @@ const CATALOG_STATUSES = [
   "confirmed",
   "out_for_delivery",
   "delivered",
+  "cancelled",
 ];
 
 const PARCEL_STATUSES = [
@@ -22,6 +23,7 @@ const PARCEL_STATUSES = [
   "out_for_delivery",
   "delivered",
   "ready_for_pickup",
+  "cancelled",
 ];
 
 const STATUS_LABELS = {
@@ -34,6 +36,7 @@ const STATUS_LABELS = {
   out_for_delivery: "Out for delivery",
   delivered: "Delivered",
   ready_for_pickup: "Ready for pickup",
+  cancelled: "Cancelled",
 };
 
 const NEXT_ACTION = {

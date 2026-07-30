@@ -1,17 +1,18 @@
-const CACHE = "tumya-v2";
+const CACHE = "tumya-v3";
 
 const SHELL = [
   "/",
-  "/css/style.css",
+  "/css/app.css",
   "/js/app.js",
   "/js/api.js",
-  "/manifest.webmanifest",
+  "/manifest.json",
   "/icons/icon-192.png",
 ];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));
-  self.skipWaiting();
+  event.waitUntil(
+    caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener("activate", (event) => {

@@ -81,7 +81,7 @@ export function renderLogin() {
         <h1 class="login-title">Tumya</h1>
 
         <p class="login-tagline">
-          Connecting India 🇮🇳 and Uganda 🇺🇬
+          Everything You Miss, Delivered.
         </p>
 
       </div>
@@ -107,13 +107,34 @@ export function renderLogin() {
     </div>
   `;
 
+  function swapAuthForm(renderFn) {
+    const form = document.getElementById("auth-form");
+    if (!form.innerHTML.trim()) {
+      renderFn();
+      return;
+    }
+    form.classList.add("auth-fade-out");
+    setTimeout(() => {
+      renderFn();
+      form.classList.remove("auth-fade-out");
+    }, 150);
+  }
+
   document
     .getElementById("tab-login")
-    .addEventListener("click", renderLoginForm);
+    .addEventListener("click", () => {
+      if (!document.getElementById("tab-login").classList.contains("active")) {
+        swapAuthForm(renderLoginForm);
+      }
+    });
 
   document
     .getElementById("tab-register")
-    .addEventListener("click", renderRegisterForm);
+    .addEventListener("click", () => {
+      if (!document.getElementById("tab-register").classList.contains("active")) {
+        swapAuthForm(renderRegisterForm);
+      }
+    });
 
   renderLoginForm();
 }

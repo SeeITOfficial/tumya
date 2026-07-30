@@ -284,6 +284,8 @@ CREATE TABLE IF NOT EXISTS email_verification_codes (
 
   expires_at TEXT NOT NULL,
 
+  attempts INTEGER NOT NULL DEFAULT 0,
+
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

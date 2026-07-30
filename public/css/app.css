@@ -314,6 +314,46 @@ label:first-child {
   padding: 22px;
 }
 
+.login-tabs {
+  display: flex;
+  gap: 8px;
+  background: var(--orange-50);
+  padding: 6px;
+  border-radius: 16px;
+  margin: 16px 0 24px;
+}
+
+.login-tabs button {
+  flex: 1;
+  background: transparent;
+  color: var(--ink-soft);
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.login-tabs button.active {
+  background: var(--card, #ffffff);
+  color: var(--ink);
+  box-shadow: var(--shadow-soft);
+}
+
+#auth-form input {
+  margin-bottom: 16px;
+}
+
+#auth-form {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+#auth-form.auth-fade-out {
+  opacity: 0;
+  transform: translateY(4px);
+}
+
 .login-submit {
   margin-top: 20px;
 }

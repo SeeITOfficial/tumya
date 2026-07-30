@@ -10,6 +10,7 @@ const {
   verifyPayment,
   submitReference,
 } = require("../lib/payments");
+const { sendOrderPlaced, sendOrderCancelled } = require('../lib/email');
 
 // Helpers
 const isPositiveInteger = (val) => Number.isInteger(Number(val)) && Number(val) > 0;
@@ -26,6 +27,10 @@ router.post('/catalog', requireAuth, (req, res) => {
     }
     if (delivery_lat == null && delivery_lng == null && !delivery_address_text) {
       return res.status(400).json({ error: 'delivery location required' });
+    }
+
+    if (typeof delivery_address_text === 'string' && delivery_address_text.length > 500) {
+      return res.status(400).json({ error: 'delivery_address_text must be 500 characters or fewer' });
     }
 
     if (delivery_lat != null && !isFiniteNumber(delivery_lat)) return res.status(400).json({ error: 'Invalid delivery_lat' });
@@ -78,7 +83,21 @@ router.post('/catalog', requireAuth, (req, res) => {
     } catch (dbErr) {
       return res.status(500).json({ error: 'Failed to create order' });
     }
-    res.status(201).json(db.prepare(`SELECT * FROM orders WHERE id = ?`).get(orderId));
+
+    const newOrder = db.prepare(`SELECT * FROM orders WHERE id = ?`).get(orderId);
+
+    // Send order-placed confirmation email (fire-and-forget — don't block the response).
+    const customer = db.prepare(`SELECT email, name FROM users WHERE id = ?`).get(req.user.id);
+    if (customer?.email) {
+      sendOrderPlaced({
+        email: customer.email,
+        customerName: customer.name,
+        orderNumber: newOrder.tracking_code,
+        total: newOrder.total_amount,
+      }).catch((err) => console.error('sendOrderPlaced failed:', err));
+    }
+
+    res.status(201).json(newOrder);
   } catch (err) {
     // Validation / stock / duplicate errors thrown in the items map are user errors (400).
     const isUserError = ['not found', 'Invalid', 'Duplicate', 'out of stock'].some((s) => err.message.includes(s));
@@ -337,13 +356,23 @@ router.delete('/cancel/:trackingCode', requireAuth, (req, res) => {
     }
 
     const tx = db.transaction(() => {
-      db.prepare(`DELETE FROM status_history WHERE order_id = ?`).run(order.id);
-      db.prepare(`DELETE FROM order_items WHERE order_id = ?`).run(order.id);
-      db.prepare(`DELETE FROM parcels WHERE order_id = ?`).run(order.id);
-      db.prepare(`DELETE FROM payments WHERE order_id = ?`).run(order.id);
-      db.prepare(`DELETE FROM orders WHERE id = ?`).run(order.id);
+      db.prepare(`UPDATE orders SET status = 'cancelled', updated_at = datetime('now') WHERE id = ?`).run(order.id);
+      db.prepare(
+        `INSERT INTO status_history (order_id, status, note) VALUES (?, 'cancelled', 'Cancelled by customer')`
+      ).run(order.id);
     });
     tx();
+
+    // Send cancellation email (fire-and-forget).
+    const customer = db.prepare(`SELECT email, name FROM users WHERE id = ?`).get(order.customer_id);
+    if (customer?.email) {
+      sendOrderCancelled({
+        email: customer.email,
+        customerName: customer.name,
+        orderNumber: order.tracking_code,
+      }).catch((err) => console.error('sendOrderCancelled failed:', err));
+    }
+
     res.json({ success: true, cancelled: order.tracking_code });
   } catch (err) {
     res.status(500).json({ error: 'Failed to cancel order', detail: err.message });

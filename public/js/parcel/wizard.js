@@ -350,6 +350,56 @@ export function renderParcelStep(view) {
               <div class="wizard-text">Receive something from another country.</div>
             </button>
           </div>
+          
+          <div style="margin-top: 40px; padding: 10px 0; text-align: center; pointer-events: none; user-select: none; overflow: hidden;">
+            <svg width="100%" height="160" viewBox="0 0 400 160" style="max-width: 100%; display: block; margin: 0 auto;">
+              <defs>
+                <pattern id="dotGrid" x="0" y="0" width="16" height="16" patternUnits="userSpaceOnUse">
+                  <circle cx="2" cy="2" r="1.5" fill="var(--ink)" opacity="0.03" />
+                </pattern>
+                <path id="topArc" d="M -30,-6 A 30,30 0 0,1 30,-6" fill="none" />
+                <path id="bottomArc" d="M 26,14 A 28,28 0 0,1 -26,14" fill="none" />
+              </defs>
+              
+              <rect width="100%" height="100%" fill="url(#dotGrid)" />
+              
+              <!-- Wavy postal cancellation lines -->
+              <path d="M -20 80 Q 80 50 180 80 T 420 80" fill="none" stroke="var(--ink)" stroke-width="2.5" opacity="0.04"/>
+              <path d="M -20 95 Q 80 65 180 95 T 420 95" fill="none" stroke="var(--ink)" stroke-width="2.5" opacity="0.04"/>
+              <path d="M -20 110 Q 80 80 180 110 T 420 110" fill="none" stroke="var(--ink)" stroke-width="2.5" opacity="0.04"/>
+              
+              <!-- Big text -->
+              <text x="180" y="85" text-anchor="middle" font-family="Plus Jakarta Sans, sans-serif" font-weight="900" font-size="46" fill="var(--ink)" opacity="0.04" letter-spacing="2">
+                DISTANCE
+              </text>
+              <text x="180" y="132" text-anchor="middle" font-family="Plus Jakarta Sans, sans-serif" font-weight="900" font-size="40" fill="var(--ink)" opacity="0.04" letter-spacing="2">
+                ENDS HERE
+              </text>
+
+              <!-- Authentic TUMYA Postal Stamp -->
+              <g transform="translate(300, 80) rotate(-16)">
+                <!-- Outer Rings -->
+                <circle cx="0" cy="0" r="50" fill="rgba(242, 104, 10, 0.04)" stroke="var(--orange-600)" stroke-width="4" opacity="0.45"/>
+                <circle cx="0" cy="0" r="44" fill="none" stroke="var(--orange-600)" stroke-width="1.5" stroke-dasharray="5 3" opacity="0.45"/>
+                
+                <!-- Circular Text -->
+                <text fill="var(--orange-600)" font-family="monospace" font-weight="bold" font-size="9" opacity="0.55" letter-spacing="1">
+                  <textPath href="#topArc" startOffset="50%" text-anchor="middle">EXPRESS ✈ LOGISTICS</textPath>
+                </text>
+                <text fill="var(--orange-600)" font-family="monospace" font-weight="bold" font-size="8" opacity="0.55" letter-spacing="1">
+                  <textPath href="#bottomArc" startOffset="50%" text-anchor="middle">UGANDA ↔ INDIA</textPath>
+                </text>
+
+                <!-- Center Text -->
+                <text x="0" y="5" text-anchor="middle" font-family="Plus Jakarta Sans, sans-serif" font-weight="900" font-size="22" fill="var(--orange-600)" letter-spacing="2" opacity="0.55">
+                  TUMYA
+                </text>
+                <text x="0" y="20" text-anchor="middle" font-family="monospace" font-weight="bold" font-size="7" fill="var(--orange-600)" opacity="0.55" letter-spacing="3">
+                  APPROVED
+                </text>
+              </g>
+            </svg>
+          </div>
         </div>
       `;
 

@@ -124,7 +124,7 @@ function itemCard(item) {
                                 loading="lazy"
                                 decoding="async"
                                 alt="${escapeHtml(item.name)}"
-                                onerror="this.src='/icons/image-placeholder.png'"
+                                onerror="this.src='/icons/image-placeholder.svg'"
                             >
                         `
                         : `
@@ -191,7 +191,7 @@ export function openProduct(id) {
                             loading="lazy"
                             alt="${escapeHtml(item.name)}"
                             onclick="openImageViewer(${index}, event)"
-                            onerror="this.src='/icons/image-placeholder.png'"
+                            onerror="this.src='/icons/image-placeholder.svg'"
                         >
                     `
                     )
@@ -364,7 +364,7 @@ export function openImageViewer(index, event) {
                     src="${src}"
                     class="viewer-image"
                     loading="lazy"
-                    onerror="this.src='/icons/image-placeholder.png'"
+                    onerror="this.src='/icons/image-placeholder.svg'"
                 >
             `
                 )

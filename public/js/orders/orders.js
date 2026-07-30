@@ -163,8 +163,51 @@ export async function renderOrders(view) {
   }
 }
 
+/**
+ * Shows a branded in-page confirmation dialog.
+ * Returns a Promise<boolean> — true if the user confirmed, false if cancelled.
+ * Uses existing app CSS classes so no extra styles are needed.
+ */
+function confirmModal(message) {
+  return new Promise((resolve) => {
+    // Backdrop
+    const backdrop = document.createElement("div");
+    backdrop.style.cssText =
+      "position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;";
+
+    // Card
+    const card = document.createElement("div");
+    card.className = "card";
+    card.style.cssText =
+      "max-width:360px;width:100%;margin:0;padding:28px 24px;animation:none;";
+    card.innerHTML = `
+      <p style="margin:0 0 24px;font-size:16px;line-height:1.6;color:var(--ink,#1a1a1a);">${message}</p>
+      <div style="display:flex;gap:12px;justify-content:flex-end;">
+        <button id="modal-cancel-btn" class="btn btn-secondary" style="min-width:90px;">Keep Order</button>
+        <button id="modal-confirm-btn" class="btn btn-cancel-order" style="min-width:90px;">Yes, Cancel</button>
+      </div>
+    `;
+
+    backdrop.appendChild(card);
+    document.body.appendChild(backdrop);
+
+    const cleanup = (result) => {
+      backdrop.remove();
+      resolve(result);
+    };
+
+    card.querySelector("#modal-confirm-btn").addEventListener("click", () => cleanup(true));
+    card.querySelector("#modal-cancel-btn").addEventListener("click", () => cleanup(false));
+    // Tap outside the card also dismisses
+    backdrop.addEventListener("click", (e) => { if (e.target === backdrop) cleanup(false); });
+    // Keyboard: Escape cancels
+    const onKey = (e) => { if (e.key === "Escape") { document.removeEventListener("keydown", onKey); cleanup(false); } };
+    document.addEventListener("keydown", onKey);
+  });
+}
+
 async function cancelOrder(code, cardEl, btnEl) {
-  const confirmed = window.confirm(`Cancel order ${code}? This cannot be undone.`);
+  const confirmed = await confirmModal(`Cancel order <strong>${escapeHtml(code)}</strong>? This cannot be undone.`);
   if (!confirmed) return;
 
   const originalText = btnEl.textContent;

@@ -3,13 +3,52 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
+const rateLimit = require("express-rate-limit");
 
 const app = express();
 
 app.disable("x-powered-by");
 
-app.use(cors());
+// ---------------------------------------------------------------------------
+// CORS — lock to our own domain; override via CORS_ORIGIN in .env for local dev
+// ---------------------------------------------------------------------------
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || "https://tumya.app",
+  credentials: true,
+}));
+
+// ---------------------------------------------------------------------------
+// Rate limiters
+// ---------------------------------------------------------------------------
+
+/** Shared JSON error handler so the frontend toast picks it up correctly. */
+const rateLimitHandler = (req, res) => {
+  res.status(429).json({ error: "Too many requests. Please wait a moment and try again." });
+};
+
+/** General auth limiter — 5 requests per 15 minutes per IP */
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler,
+});
+
+/** Tighter limiter for the resend-code endpoint — 3 per 15 min per IP */
+const resendLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler,
+});
+
 app.use(express.json({ limit: "5mb" }));
+
+// API Routes
+app.use("/api/auth/resend-code", resendLimiter);
+app.use("/api/auth", authLimiter);
 
 // API Routes
 app.use("/api/auth", require("./routes/auth"));
