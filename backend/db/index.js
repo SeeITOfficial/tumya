@@ -43,17 +43,25 @@ ensureColumn(
   "INTEGER NOT NULL DEFAULT 0"
 );
 
-// node:sqlite has no built-in transaction() wrapper like better-sqlite3
+// node:sqlite has no built-in transaction() wrapper like better-sqlite3.
+// txDepth tracks nesting: only the outermost call issues BEGIN/COMMIT/ROLLBACK;
+// inner (nested) calls execute the callback directly within the active transaction.
+let txDepth = 0;
+
 db.transaction = (fn) => {
   return (...args) => {
-    db.exec("BEGIN");
+    const isOutermost = txDepth === 0;
+    if (isOutermost) db.exec("BEGIN");
+    txDepth++;
 
     try {
       const result = fn(...args);
-      db.exec("COMMIT");
+      txDepth--;
+      if (isOutermost) db.exec("COMMIT");
       return result;
     } catch (err) {
-      db.exec("ROLLBACK");
+      txDepth--;
+      if (isOutermost) db.exec("ROLLBACK");
       throw err;
     }
   };

@@ -47,6 +47,13 @@ function createCatalogPayment(orderId, totalAmount, paymentMode) {
     ? "upi_scan"
     : "cod";
 
+  const existing = db
+    .prepare("SELECT id FROM payments WHERE order_id = ?")
+    .get(orderId);
+  if (existing) {
+    throw new Error("Payment record already exists.");
+  }
+
   db.prepare(`
     INSERT INTO payments
     (order_id, method, amount, status)
@@ -60,6 +67,13 @@ function createCatalogPayment(orderId, totalAmount, paymentMode) {
 function createParcelPayment(orderId, quoteAmount, method) {
   if (!["upi", "momo"].includes(method)) {
     throw new Error("Parcel payment method must be 'upi' or 'momo'.");
+  }
+
+  const existing = db
+    .prepare("SELECT id FROM payments WHERE order_id = ?")
+    .get(orderId);
+  if (existing) {
+    throw new Error("Payment record already exists.");
   }
 
   db.prepare(`

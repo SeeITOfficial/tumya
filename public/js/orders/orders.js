@@ -71,7 +71,11 @@ function stepsForOrder(order) {
 export async function renderOrders(view) {
   view.innerHTML = `
     <h2 class="page-title">Orders</h2>
-    <div id="orders-list" class="empty-state">Loading...</div>
+    <div id="orders-list" class="orders-list">
+      <div class="card order-card" aria-busy="true" style="opacity: 0.7; text-align: center; padding: 32px;">
+        Loading orders...
+      </div>
+    </div>
   `;
 
   const container = document.getElementById("orders-list");
@@ -94,6 +98,10 @@ export async function renderOrders(view) {
 
     const renderCard = (order, isCompleted = false) => {
       const cancellable = canCancel(order);
+      const totalAmountHtml = (order.total_amount != null && !Number.isNaN(Number(order.total_amount)))
+        ? `₹${Number(order.total_amount).toFixed(2)}`
+        : `—`;
+        
       return `
     <div class="card order-card ${isCompleted ? 'order-card-completed' : ''}" data-track="${escapeHtml(order.tracking_code)}" data-id="${order.id}">
       <div class="order-card-top">
@@ -101,7 +109,7 @@ export async function renderOrders(view) {
         <span class="badge ${isCompleted ? 'badge-completed' : ''}">${escapeHtml(formatStatus(order.status))}</span>
       </div>
       <div class="order-card-code">${escapeHtml(order.tracking_code)}</div>
-      ${order.total_amount != null ? `<div class="order-card-amount">₹${Number(order.total_amount).toFixed(2)}</div>` : ''}
+      <div class="order-card-amount">${totalAmountHtml}</div>
       <div class="order-card-note">${escapeHtml(statusDescription(order))}</div>
       <div class="order-card-time">${escapeHtml(formatDateTime(order.created_at))}</div>
       <div class="order-card-actions">
@@ -134,7 +142,10 @@ export async function renderOrders(view) {
       const card = btn.closest("[data-track]");
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
-        history.replaceState(null, "", `/?track=${card.dataset.track}`);
+        const currentUrl = new URL(location.href);
+        if (currentUrl.searchParams.get("track") !== card.dataset.track) {
+          history.pushState(null, "", `/?track=${card.dataset.track}`);
+        }
         openOrderDetail(card.dataset.track);
       });
     });
@@ -143,18 +154,23 @@ export async function renderOrders(view) {
     container.querySelectorAll("[data-action='cancel']").forEach((btn) => {
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
-        cancelOrder(btn.dataset.code, btn.closest(".order-card"));
+        cancelOrder(btn.dataset.code, btn.closest(".order-card"), btn);
       });
     });
   } catch (err) {
     container.className = "empty-state";
-    container.innerHTML = err.message;
+    container.innerHTML = escapeHtml(err.message);
   }
 }
 
-async function cancelOrder(code, cardEl) {
+async function cancelOrder(code, cardEl, btnEl) {
   const confirmed = window.confirm(`Cancel order ${code}? This cannot be undone.`);
   if (!confirmed) return;
+
+  const originalText = btnEl.textContent;
+  btnEl.disabled = true;
+  btnEl.textContent = "Cancelling...";
+  btnEl.setAttribute("aria-busy", "true");
 
   try {
     await Api.cancelOrder(code);
@@ -171,9 +187,14 @@ async function cancelOrder(code, cardEl) {
     setTimeout(() => cardEl.remove(), 700);
     toast(`Order ${code} cancelled`);
   } catch (err) {
+    btnEl.disabled = false;
+    btnEl.textContent = originalText;
+    btnEl.removeAttribute("aria-busy");
     toast(err.message || "Failed to cancel order");
   }
 }
+
+let trackAbortController = null;
 
 export async function openOrderDetail(code = null) {
   if (!code) {
@@ -187,13 +208,38 @@ export async function openOrderDetail(code = null) {
   const view = document.getElementById("view");
   if (!view) return;
 
-  view.innerHTML = `<div class="empty-state">Loading...</div>`;
+  view.innerHTML = `
+    <button class="btn btn-secondary" id="back-orders" style="margin-bottom:16px;">
+      ← Back to Orders
+    </button>
+    <div class="card order-detail-hero" aria-busy="true" style="opacity: 0.7; padding: 24px; text-align: center;">
+      Loading order details...
+    </div>
+  `;
+  
+  document.getElementById("back-orders").onclick = () => {
+    historyReplaceClearTrack();
+    renderOrders(view);
+  };
+
+  if (trackAbortController) {
+    trackAbortController.abort();
+  }
+  trackAbortController = new AbortController();
+  const currentSignal = trackAbortController.signal;
 
   try {
-    const { order, history: statusHistory, items, parcel, payment } = await Api.track(code);
+    const { order, history: statusHistory, items, parcel, payment } = await Api.track(code, { signal: currentSignal });
+    
+    if (currentSignal.aborted) return;
+
     const steps = stepsForOrder(order);
     const reached = new Set((statusHistory || []).map((h) => h.status));
     reached.add(order.status);
+    
+    const totalAmountHtml = (order.total_amount != null && !Number.isNaN(Number(order.total_amount)))
+      ? `Total: ₹${Number(order.total_amount).toFixed(2)}`
+      : `Total: —`;
 
     view.innerHTML = `
       <button class="btn btn-secondary" id="back-orders" style="margin-bottom:16px;">
@@ -206,11 +252,7 @@ export async function openOrderDetail(code = null) {
           <span class="track-status">${escapeHtml(formatStatus(order.status))}</span>
         </div>
         <div class="order-detail-type">${orderTypeLabel(order)}</div>
-        ${
-          order.total_amount != null
-            ? `<div class="order-detail-total">Total: ₹${Number(order.total_amount).toFixed(2)}</div>`
-            : ""
-        }
+        <div class="order-detail-total">${totalAmountHtml}</div>
       </div>
 
       <div class="card order-detail-section">
@@ -236,9 +278,10 @@ export async function openOrderDetail(code = null) {
       <div class="card order-detail-section">
         <h3 class="section-title" style="margin-top:0;">Timeline</h3>
         <ul class="timeline">
-          ${(statusHistory || [])
-            .map(
-              (h) => `
+          ${(statusHistory && statusHistory.length > 0)
+            ? statusHistory
+                .map(
+                  (h) => `
             <li class="done">
               <div class="t-status">${escapeHtml(formatStatus(h.status))}</div>
               ${
@@ -248,9 +291,11 @@ export async function openOrderDetail(code = null) {
               }
               <div class="t-time">${escapeHtml(formatDateTime(h.timestamp))}</div>
             </li>
-          `,
-            )
-            .join("")}
+          `
+                )
+                .join("")
+            : `<div class="empty-state" style="padding: 16px 0; border: none; background: transparent;">No status updates yet.</div>`
+          }
         </ul>
       </div>
     `;
@@ -260,6 +305,8 @@ export async function openOrderDetail(code = null) {
       renderOrders(view);
     };
   } catch (err) {
+    if (currentSignal.aborted || err.name === 'AbortError') return;
+    
     view.innerHTML = `
       <button class="btn btn-secondary" id="back-orders" style="margin-bottom:16px;">
         ← Back to Orders
@@ -309,18 +356,18 @@ function parcelBlock(parcel) {
       <h3 class="section-title" style="margin-top:0;">Parcel</h3>
       <div class="detail-row">
         <span>Description</span>
-        <strong>${escapeHtml(parcel.description)}</strong>
+        <strong>${escapeHtml(parcel.description || "—")}</strong>
       </div>
       <div class="detail-row">
         <span>Direction</span>
-        <strong>${escapeHtml(formatStatus(parcel.direction))}</strong>
+        <strong>${escapeHtml(formatStatus(parcel.direction || "—"))}</strong>
       </div>
       <div class="detail-row">
         <span>Type</span>
-        <strong>${escapeHtml(parcel.send_or_receive)}</strong>
+        <strong>${escapeHtml(parcel.send_or_receive || "—")}</strong>
       </div>
       ${
-        parcel.weight_kg != null
+        parcel?.weight_kg != null && !Number.isNaN(Number(parcel.weight_kg))
           ? `<div class="detail-row">
               <span>Weight</span>
               <strong>${escapeHtml(String(parcel.weight_kg))} kg</strong>
@@ -328,7 +375,7 @@ function parcelBlock(parcel) {
           : ""
       }
       ${
-        parcel.quote_amount != null
+        parcel?.quote_amount != null && !Number.isNaN(Number(parcel.quote_amount))
           ? `<div class="detail-row">
               <span>Quote</span>
               <strong>₹${Number(parcel.quote_amount).toFixed(2)}</strong>
@@ -350,7 +397,7 @@ function catalogBlock(items) {
           (i) => `
         <div class="detail-row">
           <span>${escapeHtml(i.item_name || `Item #${i.catalog_item_id}`)} × ${i.qty}</span>
-          <strong>₹${Number(i.unit_price).toFixed(2)}</strong>
+          <strong>${i.unit_price != null && !Number.isNaN(Number(i.unit_price)) ? `₹${Number(i.unit_price).toFixed(2)}` : "—"}</strong>
         </div>
       `,
         )

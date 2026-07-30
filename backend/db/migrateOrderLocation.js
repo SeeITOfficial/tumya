@@ -1,17 +1,24 @@
 const db = require('./index');
 
-const cols = db.prepare(`PRAGMA table_info(orders)`).all().map(c => c.name);
+const columns = new Set(
+  db.prepare('PRAGMA table_info(orders)').all().map(c => c.name)
+);
 
-if (!cols.includes('delivery_lat')) {
-  db.exec(`ALTER TABLE orders ADD COLUMN delivery_lat REAL`);
-  console.log('added delivery_lat');
-}
-if (!cols.includes('delivery_lng')) {
-  db.exec(`ALTER TABLE orders ADD COLUMN delivery_lng REAL`);
-  console.log('added delivery_lng');
-}
-if (!cols.includes('delivery_address_text')) {
-  db.exec(`ALTER TABLE orders ADD COLUMN delivery_address_text TEXT`);
-  console.log('added delivery_address_text');
-}
-console.log('done');
+const migrations = [
+  ['delivery_lat', 'REAL'],
+  ['delivery_lng', 'REAL'],
+  ['delivery_address_text', 'TEXT']
+];
+
+const tx = db.transaction(() => {
+  for (const [name, type] of migrations) {
+    if (!columns.has(name)) {
+      db.exec(`ALTER TABLE orders ADD COLUMN ${name} ${type}`);
+      console.log(`Added ${name}`);
+    }
+  }
+});
+
+tx();
+
+console.log('Migration complete.');

@@ -30,42 +30,48 @@ const update = db.prepare(`
 `);
 
 async function migrateField(value) {
-    if (
-        !value ||
-        !value.startsWith("data:image/")
-    ) {
+    if (!value || !value.startsWith("data:image/")) {
         return value;
     }
 
-    const base64 = value.split(",")[1];
+    try {
+        const base64 = value.split(",")[1];
 
-    const filename = `${crypto.randomUUID()}.webp`;
+        const filename = `${crypto.randomUUID()}.webp`;
 
-    const output = path.join(uploadDir, filename);
+        const output = path.join(uploadDir, filename);
 
-    await sharp(Buffer.from(base64, "base64"))
-        .webp({ quality: 85 })
-        .toFile(output);
+        await sharp(Buffer.from(base64, "base64"))
+            .webp({ quality: 85 })
+            .toFile(output);
 
-    return `/uploads/catalog/${filename}`;
+        return `/uploads/catalog/${filename}`;
+    } catch (err) {
+        console.error(`Failed to migrate image: ${err.message}`);
+        return value; // Keep original value if conversion fails
+    }
 }
 
 (async () => {
+    try {
+        for (const item of items) {
+            const photo1 = await migrateField(item.photo_url);
+            const photo2 = await migrateField(item.photo_url_2);
 
-    for (const item of items) {
+            update.run(
+                photo1,
+                photo2,
+                item.id
+            );
 
-        const photo1 = await migrateField(item.photo_url);
-        const photo2 = await migrateField(item.photo_url_2);
+            console.log(`✓ ${item.id}`);
+        }
 
-        update.run(
-            photo1,
-            photo2,
-            item.id
-        );
-
-        console.log(`✓ ${item.id}`);
+        console.log("Migration complete.");
+    } catch (err) {
+        console.error("Migration failed:", err);
+        process.exitCode = 1;
+    } finally {
+        db.close();
     }
-
-    console.log("Migration complete.");
-
 })();

@@ -1,10 +1,11 @@
 const CACHE = "tumya-v2";
+
 const SHELL = [
   "/",
-  "/css/app.css",
+  "/css/style.css",
   "/js/app.js",
   "/js/api.js",
-  "/manifest.json",
+  "/manifest.webmanifest",
   "/icons/icon-192.png",
 ];
 
@@ -29,6 +30,7 @@ self.addEventListener("activate", (event) => {
 // Network-first for API calls (always want fresh data), cache-first for the app shell
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
+
   if (url.pathname.startsWith("/api/")) return; // never cache API responses
 
   event.respondWith(
@@ -40,6 +42,7 @@ self.addEventListener("fetch", (event) => {
 
 self.addEventListener("push", (event) => {
   if (!event.data) return;
+
   let payload;
   try {
     payload = event.data.json();
@@ -59,6 +62,10 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
+
   const code = event.notification.data?.trackingCode;
-  event.waitUntil(clients.openWindow(code ? `/?track=${code}` : "/"));
+
+  event.waitUntil(
+    clients.openWindow(code ? `/?track=${encodeURIComponent(code)}` : "/"),
+  );
 });

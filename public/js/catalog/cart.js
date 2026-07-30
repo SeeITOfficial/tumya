@@ -15,9 +15,26 @@ let cart = {
 
 try {
   const saved = localStorage.getItem("tumya_cart");
-  if (saved) cart = JSON.parse(saved);
+  if (saved) {
+    const parsed = JSON.parse(saved);
+    if (parsed && Array.isArray(parsed.orderItems) && Array.isArray(parsed.bookingItems)) {
+      const sanitizeItem = (c) => {
+        if (!c || !c.item) return false;
+        if (!Number.isFinite(c.qty) || c.qty <= 0) c.qty = 1;
+        return true;
+      };
+      parsed.orderItems = parsed.orderItems.filter(sanitizeItem);
+      parsed.bookingItems = parsed.bookingItems.filter(sanitizeItem);
+      cart = parsed;
+    } else {
+      localStorage.removeItem("tumya_cart");
+      cart = { orderItems: [], bookingItems: [] };
+    }
+  }
 } catch (e) {
   console.error("Failed to load cart", e);
+  localStorage.removeItem("tumya_cart");
+  cart = { orderItems: [], bookingItems: [] };
 }
 
 function saveCart() {
@@ -25,6 +42,8 @@ function saveCart() {
 }
 
 let checkoutLocation = { delivery_lat: null, delivery_lng: null, delivery_address_text: "" };
+let placingOrder = false;
+let geocodeController = null;
 
 export function getCart() {
   return cart;
@@ -58,7 +77,10 @@ export function addToCart(itemId) {
     return;
   }
 
-  const productQty = getProductQty();
+  let productQty = getProductQty();
+  if (!Number.isFinite(productQty) || productQty <= 0) {
+    productQty = 1;
+  }
 
   const targetCart =
     item.stock_status === "coming_soon"
@@ -240,9 +262,15 @@ function grabCurrentLocation() {
         statusEl.textContent = `✅ Location captured (±${Math.round(accuracy)}m accuracy). Fetching address...`;
       }
       
-      fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`)
+      if (geocodeController) {
+        geocodeController.abort();
+      }
+      geocodeController = new AbortController();
+
+      fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`, { signal: geocodeController.signal })
         .then(res => res.json())
         .then(data => {
+          geocodeController = null;
           if (data && data.display_name) {
             const input = document.getElementById("delivery-address-text");
             if (input) {
@@ -250,15 +278,17 @@ function grabCurrentLocation() {
               checkoutLocation.delivery_address_text = data.display_name;
             }
             if (isImprecise) {
-              statusEl.innerHTML = `⚠️ Captured: ${data.address.city || data.address.town || data.address.state || "Approximate area"}. <strong>Please verify/edit the address below!</strong>`;
+              statusEl.innerHTML = `⚠️ Captured: ${data.address?.city || data.address?.town || data.address?.state || "Approximate area"}. <strong>Please verify/edit the address below!</strong>`;
             } else {
-              statusEl.textContent = `✅ Location captured (${data.address.city || data.address.town || data.address.suburb || "Found"})`;
+              statusEl.textContent = `✅ Location captured (${data.address?.city || data.address?.town || data.address?.suburb || "Found"})`;
             }
           } else {
              statusEl.textContent = isImprecise ? `⚠️ Location is imprecise (±${Math.round(accuracy / 1000)}km). Please type your address.` : `✅ Location captured (±${Math.round(accuracy)}m accuracy)`;
           }
         })
         .catch(e => {
+          geocodeController = null;
+          if (e.name === 'AbortError') return;
           statusEl.textContent = isImprecise ? `⚠️ Location is imprecise (±${Math.round(accuracy / 1000)}km). Please type your address.` : `✅ Location captured (±${Math.round(accuracy)}m accuracy)`;
         });
     },
@@ -274,6 +304,8 @@ function grabCurrentLocation() {
 }
 
 async function placeCatalogOrder() {
+  if (placingOrder) return;
+
   const payment_mode =
     document.querySelector('input[name="pm"]:checked').value;
 
@@ -282,6 +314,13 @@ async function placeCatalogOrder() {
   if (!hasCoords && !hasText) {
     toast("Add a delivery location — use current location or type an address.", true);
     return;
+  }
+
+  placingOrder = true;
+  const btn = document.getElementById("place-order-btn");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Placing Order...";
   }
 
   const items = cart.orderItems.map((c) => ({
@@ -331,6 +370,11 @@ async function placeCatalogOrder() {
     }
 
   } catch (err) {
+    placingOrder = false;
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = "Place Order &rarr;";
+    }
     toast(err.message, true);
   }
 }

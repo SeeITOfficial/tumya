@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node --no-warnings server.js",
     "seed": "node --no-warnings db/seed.js",
-    "dev": "node --no-warnings --watch server.js"
+    "dev": "nodemon server.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -20,6 +20,9 @@
     "sharp": "^0.35.3",
     "uuid": "^14.0.1",
     "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
   },
   "engines": {
     "node": ">=22.13.0"

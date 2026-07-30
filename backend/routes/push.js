@@ -4,7 +4,11 @@ const db = require('../db');
 const { requireAuth } = require('../lib/auth');
 const { VAPID_PUBLIC } = require('../lib/push');
 
-// Public: frontend needs this to call PushManager.subscribe()
+/**
+ * GET /push/vapid-public-key
+ * Returns the server's VAPID public key so the client can call PushManager.subscribe().
+ * No authentication required.
+ */
 router.get('/vapid-public-key', (req, res) => {
   if (!VAPID_PUBLIC) {
     return res.status(503).json({
@@ -17,53 +21,78 @@ router.get('/vapid-public-key', (req, res) => {
   });
 });
 
-// Customer: register a push subscription
+/**
+ * POST /push/subscribe
+ * Registers or updates a push subscription for the authenticated customer.
+ * Body: { endpoint: string, keys: { p256dh: string, auth: string } }
+ */
 router.post('/subscribe', requireAuth, (req, res) => {
   const { endpoint, keys } = req.body;
 
-  if (!endpoint || !keys?.p256dh || !keys?.auth) {
+  const cleanEndpoint = typeof endpoint === 'string' ? endpoint.trim() : '';
+  const cleanP256dh   = typeof keys?.p256dh === 'string' ? keys.p256dh.trim() : '';
+  const cleanAuth     = typeof keys?.auth    === 'string' ? keys.auth.trim()    : '';
+
+  if (!cleanEndpoint || !keys || !cleanP256dh || !cleanAuth) {
     return res.status(400).json({
       error: 'endpoint and keys.p256dh/keys.auth required'
     });
   }
 
-  db.prepare(`
-    INSERT INTO push_subscriptions (
-      customer_id,
-      endpoint,
-      p256dh,
-      auth
-    )
-    VALUES (?, ?, ?, ?)
-    ON CONFLICT(endpoint)
-    DO UPDATE SET
-      customer_id = excluded.customer_id
-  `).run(
-    req.user.id,
-    endpoint,
-    keys.p256dh,
-    keys.auth
-  );
+  try {
+    db.prepare(`
+      INSERT INTO push_subscriptions (
+        customer_id,
+        endpoint,
+        p256dh,
+        auth
+      )
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(endpoint)
+      DO UPDATE SET
+        customer_id = excluded.customer_id
+    `).run(
+      req.user.id,
+      cleanEndpoint,
+      cleanP256dh,
+      cleanAuth
+    );
+  } catch (err) {
+    console.error('push /subscribe db error:', err);
+    return res.status(500).json({ error: 'Failed to save subscription' });
+  }
 
   res.status(201).json({
     ok: true
   });
 });
 
+/**
+ * POST /push/unsubscribe
+ * Removes a push subscription for the authenticated customer.
+ * Body: { endpoint: string }
+ */
 router.post('/unsubscribe', requireAuth, (req, res) => {
   const { endpoint } = req.body;
 
-  if (!endpoint) {
+  const cleanEndpoint = typeof endpoint === 'string' ? endpoint.trim() : '';
+
+  if (!cleanEndpoint) {
     return res.status(400).json({
       error: 'endpoint required'
     });
   }
 
-  db.prepare(`
-    DELETE FROM push_subscriptions
-    WHERE endpoint = ?
-      AND customer_id = ?
-  `).run(endpoint, req.user.id);
+  try {
+    db.prepare(`
+      DELETE FROM push_subscriptions
+      WHERE endpoint = ?
+        AND customer_id = ?
+    `).run(cleanEndpoint, req.user.id);
+  } catch (err) {
+    console.error('push /unsubscribe db error:', err);
+    return res.status(500).json({ error: 'Failed to remove subscription' });
+  }
 
   res.json({
     ok: true

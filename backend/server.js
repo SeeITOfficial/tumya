@@ -81,6 +81,21 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 4000;
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Tumya API listening on port ${PORT}`);
 });
+
+function shutdown(signal) {
+  console.log(`${signal} received — shutting down gracefully`);
+  server.close((err) => {
+    if (err) {
+      console.error("Error during shutdown:", err);
+      process.exit(1);
+    }
+    console.log("HTTP server closed");
+    process.exit(0);
+  });
+}
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
