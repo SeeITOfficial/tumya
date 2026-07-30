@@ -1,36 +1,75 @@
 const webpush = require('web-push');
 const db = require('../db');
 
-const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY;
-const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
-const VAPID_CONTACT = process.env.VAPID_CONTACT_EMAIL || 'mailto:admin@tumya.app';
+const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY?.trim();
+const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY?.trim();
+const VAPID_CONTACT =
+  process.env.VAPID_CONTACT_EMAIL?.trim() || 'mailto:admin@tumya.app';
 
-if (VAPID_PUBLIC && VAPID_PRIVATE) {
-  webpush.setVapidDetails(VAPID_CONTACT, VAPID_PUBLIC, VAPID_PRIVATE);
+const PUSH_ENABLED = Boolean(VAPID_PUBLIC && VAPID_PRIVATE);
+
+if (PUSH_ENABLED) {
+  webpush.setVapidDetails(
+    VAPID_CONTACT,
+    VAPID_PUBLIC,
+    VAPID_PRIVATE
+  );
 } else {
-  console.warn('WARNING: VAPID keys not set — push notifications disabled. Generate with: npx web-push generate-vapid-keys');
+  console.warn(
+    'WARNING: Push notifications are disabled. Missing VAPID_PUBLIC_KEY and/or VAPID_PRIVATE_KEY.'
+  );
 }
 
 async function notifyCustomer(customerId, payload) {
-  if (!VAPID_PUBLIC || !VAPID_PRIVATE) return; // silently no-op if not configured
+  if (!PUSH_ENABLED) return;
 
-  const subs = db.prepare('SELECT * FROM push_subscriptions WHERE customer_id = ?').all(customerId);
-  for (const sub of subs) {
+  if (!customerId || !payload) return;
+
+  const subscriptions = db
+    .prepare(
+      `
+      SELECT *
+      FROM push_subscriptions
+      WHERE customer_id = ?
+    `
+    )
+    .all(customerId);
+
+  if (!subscriptions.length) return;
+
+  const body = JSON.stringify(payload);
+
+  for (const sub of subscriptions) {
     const subscription = {
       endpoint: sub.endpoint,
-      keys: { p256dh: sub.p256dh, auth: sub.auth },
+      keys: {
+        p256dh: sub.p256dh,
+        auth: sub.auth,
+      },
     };
+
     try {
-      await webpush.sendNotification(subscription, JSON.stringify(payload));
+      await webpush.sendNotification(subscription, body);
     } catch (err) {
-      // Expired/invalid subscription — clean it up so we stop trying
       if (err.statusCode === 404 || err.statusCode === 410) {
-        db.prepare('DELETE FROM push_subscriptions WHERE id = ?').run(sub.id);
+        db.prepare(
+          `
+          DELETE FROM push_subscriptions
+          WHERE id = ?
+        `
+        ).run(sub.id);
       } else {
-        console.error('Push send failed:', err.message);
+        console.error(
+          `Push notification failed for customer ${customerId}:`,
+          err.message
+        );
       }
     }
   }
 }
 
-module.exports = { notifyCustomer, VAPID_PUBLIC };
+module.exports = {
+  notifyCustomer,
+  VAPID_PUBLIC,
+  PUSH_ENABLED,
+};
