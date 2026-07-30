@@ -33,6 +33,16 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   handler: rateLimitHandler,
+  skip: (req) => req.originalUrl.includes('/admin/login'),
+});
+
+/** Admin login limiter — 20 requests per 15 minutes per IP */
+const adminLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler,
 });
 
 /** Tighter limiter for the resend-code endpoint — 3 per 15 min per IP */
@@ -48,6 +58,7 @@ app.use(express.json({ limit: "5mb" }));
 
 // API Routes
 app.use("/api/auth/resend-code", resendLimiter);
+app.use("/api/auth/admin/login", adminLimiter);
 app.use("/api/auth", authLimiter);
 
 // API Routes
