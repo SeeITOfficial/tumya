@@ -3,6 +3,7 @@ import { renderOrders } from "./orders/orders.js";
 import { renderCatalog } from "./catalog/catalog.js";
 import { renderPickupPoints } from "./pickup/pickup.js";
 import { renderRates } from "./rates/rates.js";
+import { renderCustomers } from "./customers/customers.js";
 
 // --- Admin API client (separate token namespace from customer app) ---
 export const AdminApi = (() => {
@@ -123,6 +124,7 @@ export const AdminApi = (() => {
       request("/pickup-points", { method: "POST", body: payload }),
     deactivatePickupPoint: (id) =>
       request(`/pickup-points/${id}/deactivate`, { method: "PATCH" }),
+    getCustomers: () => request("/auth/customers"),
   };
 })();
 
@@ -181,6 +183,7 @@ function renderShell() {
           <button data-tab="catalog">Catalog</button>
           <button data-tab="pickup">Pickup Points</button>
           <button data-tab="rates">Parcel Rates</button>
+          <button data-tab="customers">Customers</button>
         </nav>
         <div class="sidebar-user">
           ${escapeHtml(user?.name || "")}<br />
@@ -213,6 +216,7 @@ export async function goto(tab) {
     else if (tab === "catalog") await renderCatalog(view);
     else if (tab === "pickup") await renderPickupPoints(view);
     else if (tab === "rates") await renderRates(view);
+    else if (tab === "customers") await renderCustomers(view);
   } catch (err) {
     view.innerHTML = `<div class="empty-state">${err.message}</div>`;
   }

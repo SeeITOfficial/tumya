@@ -324,6 +324,109 @@ ${status}
   });
 }
 
+// Parse comma-separated admin emails from env, e.g. "a@x.com,b@x.com,c@x.com"
+function getAdminEmails() {
+  const raw = process.env.ADMIN_NOTIFICATION_EMAIL || "";
+  return raw
+    .split(",")
+    .map((e) => e.trim())
+    .filter(Boolean);
+}
+
+async function sendNewOrderAdminAlert({ orderNumber, customerName, type, total }) {
+  const adminEmails = getAdminEmails();
+  if (adminEmails.length === 0) {
+    console.warn("sendNewOrderAdminAlert: no admin emails configured, skipping.");
+    return;
+  }
+
+  const html = emailLayout(
+    "🚨 New Order Received",
+    `
+    <div style="background:#f9fafb;padding:20px;border-radius:12px;margin:24px 0;">
+      <h3 style="margin-top:0;margin-bottom:16px;">A new order has been placed!</h3>
+      <table width="100%" cellpadding="8" style="background:#ffffff;border-radius:8px;">
+        <tr>
+          <td><strong>Order Number</strong></td>
+          <td align="right">${orderNumber}</td>
+        </tr>
+        <tr>
+          <td><strong>Customer</strong></td>
+          <td align="right">${customerName}</td>
+        </tr>
+        <tr>
+          <td><strong>Type</strong></td>
+          <td align="right">${type}</td>
+        </tr>
+        <tr>
+          <td><strong>Total/Quote</strong></td>
+          <td align="right">${total ? '₹' + Number(total).toFixed(2) : 'Needs Quote'}</td>
+        </tr>
+      </table>
+      <div style="margin-top:20px;text-align:center;">
+        <a href="https://tumya.app/admin" style="display:inline-block;padding:12px 24px;background:#ff7a00;color:#ffffff;text-decoration:none;border-radius:24px;font-weight:bold;">View in Admin Dashboard</a>
+      </div>
+    </div>
+    `
+  );
+
+  return Promise.all(
+    adminEmails.map((to) =>
+      sendEmail({
+        to,
+        subject: `🚨 New Order: ${orderNumber}`,
+        text: `A new order has been placed by ${customerName}.\nOrder Number: ${orderNumber}\nType: ${type}\nTotal: ${total ? '₹' + Number(total).toFixed(2) : 'Needs Quote'}`,
+        html,
+      })
+    )
+  );
+}
+
+async function sendOrderCancelledAdminAlert({ orderNumber, customerName, type }) {
+  const adminEmails = getAdminEmails();
+  if (adminEmails.length === 0) {
+    console.warn("sendOrderCancelledAdminAlert: no admin emails configured, skipping.");
+    return;
+  }
+
+  const html = emailLayout(
+    "❌ Order Cancelled by Customer",
+    `
+    <div style="background:#fff5f5;padding:20px;border-radius:12px;margin:24px 0;border:2px solid #fecaca;">
+      <h3 style="margin-top:0;margin-bottom:16px;color:#dc2626;">A customer has cancelled their order.</h3>
+      <table width="100%" cellpadding="8" style="background:#ffffff;border-radius:8px;">
+        <tr>
+          <td><strong>Order Number</strong></td>
+          <td align="right">${orderNumber}</td>
+        </tr>
+        <tr>
+          <td><strong>Customer</strong></td>
+          <td align="right">${customerName}</td>
+        </tr>
+        <tr>
+          <td><strong>Type</strong></td>
+          <td align="right">${type}</td>
+        </tr>
+      </table>
+      <div style="margin-top:20px;text-align:center;">
+        <a href="https://tumya.app/admin" style="display:inline-block;padding:12px 24px;background:#ff7a00;color:#ffffff;text-decoration:none;border-radius:24px;font-weight:bold;">View in Admin Dashboard</a>
+      </div>
+    </div>
+    `
+  );
+
+  return Promise.all(
+    adminEmails.map((to) =>
+      sendEmail({
+        to,
+        subject: `❌ Order Cancelled: ${orderNumber}`,
+        text: `Order ${orderNumber} has been cancelled by customer ${customerName}.`,
+        html,
+      })
+    )
+  );
+}
+
 module.exports = {
   sendVerificationCode,
   sendOrderPlaced,
@@ -332,4 +435,6 @@ module.exports = {
   sendOutForDelivery,
   sendOrderDelivered,
   sendOrderCancelled,
+  sendNewOrderAdminAlert,
+  sendOrderCancelledAdminAlert,
 };

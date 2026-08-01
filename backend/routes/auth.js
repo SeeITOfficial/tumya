@@ -462,6 +462,29 @@ router.get('/admins', requireAuth, requireAdmin, (req, res) => {
   }
 });
 
+// Admin: list all customer accounts with order count
+router.get('/customers', requireAuth, requireAdmin, (req, res) => {
+  try {
+    const customers = db.prepare(`
+      SELECT
+        u.id,
+        u.name,
+        u.email,
+        u.phone,
+        u.created_at,
+        COUNT(o.id) AS order_count
+      FROM users u
+      LEFT JOIN orders o ON o.customer_id = u.id
+      WHERE u.role = 'customer'
+      GROUP BY u.id
+      ORDER BY u.created_at DESC
+    `).all();
+    res.json(customers);
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 function generateVerificationCode() {
   return crypto.randomInt(100000, 1000000).toString();
 }

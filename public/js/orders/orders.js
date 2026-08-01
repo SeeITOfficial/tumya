@@ -19,7 +19,7 @@ const CATALOG_STEPS = [
 ];
 
 // Statuses where cancellation is no longer allowed
-const NON_CANCELLABLE = new Set(["out_for_delivery", "in_transit", "delivered"]);
+const NON_CANCELLABLE = new Set(["out_for_delivery", "in_transit", "delivered", "cancelled"]);
 
 function canCancel(order) {
   return !NON_CANCELLABLE.has(order.status);
@@ -98,15 +98,16 @@ export async function renderOrders(view) {
 
     const renderCard = (order, isCompleted = false) => {
       const cancellable = canCancel(order);
+      const isCancelled = order.status === "cancelled";
       const totalAmountHtml = (order.total_amount != null && !Number.isNaN(Number(order.total_amount)))
         ? `₹${Number(order.total_amount).toFixed(2)}`
         : `—`;
         
       return `
-    <div class="card order-card ${isCompleted ? 'order-card-completed' : ''}" data-track="${escapeHtml(order.tracking_code)}" data-id="${order.id}">
+    <div class="card order-card ${isCompleted && !isCancelled ? 'order-card-completed' : ''} ${isCancelled ? 'order-card-cancelled' : ''}" data-track="${escapeHtml(order.tracking_code)}" data-id="${order.id}">
       <div class="order-card-top">
         <strong>${orderTypeLabel(order)}</strong>
-        <span class="badge ${isCompleted ? 'badge-completed' : ''}">${escapeHtml(formatStatus(order.status))}</span>
+        <span class="badge ${isCompleted && !isCancelled ? 'badge-completed' : ''} ${isCancelled ? 'badge-cancelled' : ''}">${escapeHtml(formatStatus(order.status))}</span>
       </div>
       <div class="order-card-code">${escapeHtml(order.tracking_code)}</div>
       <div class="order-card-amount">${totalAmountHtml}</div>
@@ -120,8 +121,8 @@ export async function renderOrders(view) {
           ? `<button class="btn btn-sm btn-cancel-order" type="button" data-action="cancel" data-code="${escapeHtml(order.tracking_code)}">
               Cancel Order
             </button>`
-          : `<button class="btn btn-sm btn-cancel-disabled" type="button" disabled title="Delivery has started — cannot cancel">
-              Cannot Cancel
+          : `<button class="btn btn-sm btn-cancel-disabled" type="button" disabled title="Delivery has started or order is cancelled">
+              ${isCancelled ? 'Cancelled' : 'Cannot Cancel'}
             </button>`
         }
       </div>

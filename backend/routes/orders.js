@@ -10,7 +10,7 @@ const {
   verifyPayment,
   submitReference,
 } = require("../lib/payments");
-const { sendOrderPlaced, sendOrderCancelled } = require('../lib/email');
+const { sendOrderPlaced, sendOrderCancelled, sendNewOrderAdminAlert, sendOrderCancelledAdminAlert } = require('../lib/email');
 
 // Helpers
 const isPositiveInteger = (val) => Number.isInteger(Number(val)) && Number(val) > 0;
@@ -96,6 +96,13 @@ router.post('/catalog', requireAuth, (req, res) => {
         total: newOrder.total_amount,
       }).catch((err) => console.error('sendOrderPlaced failed:', err));
     }
+
+    sendNewOrderAdminAlert({
+      orderNumber: newOrder.tracking_code,
+      customerName: customer?.name || 'Unknown',
+      type: 'Catalog Order',
+      total: newOrder.total_amount,
+    }).catch((err) => console.error('sendNewOrderAdminAlert failed:', err));
 
     res.status(201).json(newOrder);
   } catch (err) {
@@ -363,7 +370,7 @@ router.delete('/cancel/:trackingCode', requireAuth, (req, res) => {
     });
     tx();
 
-    // Send cancellation email (fire-and-forget).
+    // Send cancellation email to customer (fire-and-forget).
     const customer = db.prepare(`SELECT email, name FROM users WHERE id = ?`).get(order.customer_id);
     if (customer?.email) {
       sendOrderCancelled({
@@ -372,6 +379,13 @@ router.delete('/cancel/:trackingCode', requireAuth, (req, res) => {
         orderNumber: order.tracking_code,
       }).catch((err) => console.error('sendOrderCancelled failed:', err));
     }
+
+    // Alert all admins about the cancellation (fire-and-forget).
+    sendOrderCancelledAdminAlert({
+      orderNumber: order.tracking_code,
+      customerName: customer?.name || 'Unknown',
+      type: order.type === 'catalog' ? 'Catalog Order' : 'Parcel',
+    }).catch((err) => console.error('sendOrderCancelledAdminAlert failed:', err));
 
     res.json({ success: true, cancelled: order.tracking_code });
   } catch (err) {

@@ -6,6 +6,7 @@ const db = require("../db");
 const { requireAuth, requireAdmin } = require("../lib/auth");
 const { generateTrackingCode } = require("../lib/trackingCode");
 const { updateStatus } = require("../lib/orderLifecycle");
+const { sendNewOrderAdminAlert } = require("../lib/email");
 
 const {
   createParcelPayment,
@@ -192,8 +193,18 @@ router.post("/", requireAuth, (req, res) => {
     return res.status(500).json({ error: "Failed to create parcel order" });
   }
 
+  const newOrder = db.prepare("SELECT * FROM orders WHERE id=?").get(orderId);
+  const customer = db.prepare("SELECT name FROM users WHERE id=?").get(req.user.id);
+  
+  sendNewOrderAdminAlert({
+    orderNumber: newOrder.tracking_code,
+    customerName: customer?.name || 'Unknown',
+    type: 'Parcel Order',
+    total: null,
+  }).catch((err) => console.error('sendNewOrderAdminAlert failed:', err));
+
   res.status(201).json({
-    order: db.prepare("SELECT * FROM orders WHERE id=?").get(orderId),
+    order: newOrder,
     parcel: db.prepare("SELECT * FROM parcels WHERE order_id=?").get(orderId),
   });
 });
@@ -207,7 +218,7 @@ router.post("/", requireAuth, (req, res) => {
  * Admin records the physical weight of a parcel. Calculates a suggested quote
  * amount based on the current rate_config for the parcel's direction.
  */
-router.post("/:orderId/weigh", requireAuth, requireAdmin, (req, res) => {
+router.post("/:orderId/weigh", requireAuth, requireAdmin, async (req, res) => {
   if (!isPositiveInteger(req.params.orderId)) {
     return res.status(400).json({ error: "Invalid order ID" });
   }
@@ -232,9 +243,24 @@ router.post("/:orderId/weigh", requireAuth, requireAdmin, (req, res) => {
     .prepare("SELECT * FROM rate_config WHERE direction=?")
     .get(parcel.direction);
 
-  const suggested = rate
-    ? Math.round(weight_kg * rate.rate_per_kg * 100) / 100
-    : null;
+  let suggested = null;
+  let inrRate = 1;
+
+  if (rate) {
+    try {
+      const response = await fetch("https://api.exchangerate-api.com/v4/latest/USD");
+      const data = await response.json();
+      if (data && data.rates && data.rates.INR) {
+        inrRate = data.rates.INR;
+      }
+    } catch (e) {
+      console.error("Failed to fetch exchange rate", e);
+      inrRate = 83.5; // fallback rate
+    }
+    
+    // Calculate final suggested amount in INR: weight * rate_per_kg (USD) * INR exchange rate
+    suggested = Math.round(weight_kg * rate.rate_per_kg * inrRate * 100) / 100;
+  }
 
   try {
     db.prepare(`
@@ -251,8 +277,9 @@ router.post("/:orderId/weigh", requireAuth, requireAdmin, (req, res) => {
   res.json({
     weight_kg,
     suggested_amount: suggested,
-    currency: rate?.currency ?? null,
+    currency: 'INR', // Forced to INR since we convert
     rate_per_kg: rate?.rate_per_kg ?? null,
+    inr_rate_used: inrRate,
   });
 });
 

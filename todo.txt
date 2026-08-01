@@ -1,0 +1,21 @@
+Backend Updates: Dynamic USD/INR Parcel Quotes & Admin Email Notifications
+I will implement two major backend improvements based on your request.
+
+Proposed Changes
+1. Dynamic USD to INR Conversion for Parcel Quotes
+When an admin weighs a parcel going to Uganda (india_to_uganda):
+
+The backend will fetch the live USD to INR exchange rate using a free real-time currency API.
+It will automatically calculate the quote by multiplying the weight_kg by the configured USD rate_per_kg and then multiplying by the current INR exchange rate.
+This dynamic INR value will become the suggested_amount that shows up in the admin dashboard. As requested, the admin can still manually edit this number if they want to explicitly type a different amount.
+2. Admin Email Notifications
+I will configure the system to send an email alert to the admins immediately after a customer places a new order.
+
+Dedicated Admin Email: I will create a new environment variable ADMIN_NOTIFICATION_EMAIL. By default, I will set this to admin@tumya.app. (Since this is just the recipient address, you don't need a separate mail provider setup for it; Resend will simply deliver the notifications to this inbox, assuming you have it set up in your email client).
+Notification Details: The email will include the tracking code, order type, and the customer's name so the admins can review it immediately on the dashboard.
+User Review Required
+Does this plan cover exactly what you are looking for?
+
+Are you okay with the default admin email being admin@tumya.app? (You can always change it later in your .env file).
+Are you okay with using api.exchangerate-api.com (a free, reliable real-time currency API) to fetch the live USD/INR rates?
+Click Proceed if this plan looks good to you, and I will implement the code!
