@@ -465,6 +465,11 @@ router.get('/admins', requireAuth, requireAdmin, (req, res) => {
 // Admin: list all customer accounts with order count
 router.get('/customers', requireAuth, requireAdmin, (req, res) => {
   try {
+    const adminEmails = (process.env.ADMIN_NOTIFICATION_EMAIL || "")
+      .split(',')
+      .map(e => e.trim().toLowerCase())
+      .filter(Boolean);
+
     const customers = db.prepare(`
       SELECT
         u.id,
@@ -479,7 +484,13 @@ router.get('/customers', requireAuth, requireAdmin, (req, res) => {
       GROUP BY u.id
       ORDER BY u.created_at DESC
     `).all();
-    res.json(customers);
+
+    const filtered = customers.filter(c => {
+      if (!c.email) return true;
+      return !adminEmails.includes(c.email.trim().toLowerCase());
+    });
+
+    res.json(filtered);
   } catch (error) {
     res.status(500).json({ error: 'Internal server error' });
   }
