@@ -1,4 +1,4 @@
-const CACHE = "tumya-v3";
+const CACHE = "tumya-v4";
 
 const SHELL = [
   "/",
