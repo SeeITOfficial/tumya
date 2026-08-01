@@ -4,6 +4,8 @@ const express = require("express");
 const cors = require("cors");
 const path = require("path");
 const rateLimit = require("express-rate-limit");
+const { webhooksRouter } = require('./routes/webhooks');
+const { startJobs } = require('./lib/jobs');
 
 const app = express();
 
@@ -133,6 +135,7 @@ const PORT = process.env.PORT || 4000;
 
 const server = app.listen(PORT, () => {
   console.log(`Tumya API listening on port ${PORT}`);
+  startJobs();
 });
 
 function shutdown(signal) {

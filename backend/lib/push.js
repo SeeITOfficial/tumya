@@ -68,8 +68,40 @@ async function notifyCustomer(customerId, payload) {
   }
 }
 
+async function notifyAllCustomers(payload) {
+  if (!PUSH_ENABLED || !payload) return;
+
+  const subscriptions = db.prepare(`SELECT * FROM push_subscriptions`).all();
+  if (!subscriptions.length) return;
+
+  const body = JSON.stringify(payload);
+  let sent = 0;
+  let failed = 0;
+
+  for (const sub of subscriptions) {
+    const subscription = {
+      endpoint: sub.endpoint,
+      keys: { p256dh: sub.p256dh, auth: sub.auth },
+    };
+
+    try {
+      await webpush.sendNotification(subscription, body);
+      sent++;
+    } catch (err) {
+      failed++;
+      if (err.statusCode === 404 || err.statusCode === 410) {
+        db.prepare(`DELETE FROM push_subscriptions WHERE id = ?`).run(sub.id);
+      }
+    }
+  }
+
+  console.log(`Push blast complete. Sent: ${sent}, Failed: ${failed}`);
+  return { sent, failed };
+}
+
 module.exports = {
   notifyCustomer,
+  notifyAllCustomers,
   VAPID_PUBLIC,
   PUSH_ENABLED,
 };

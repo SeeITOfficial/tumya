@@ -4,6 +4,7 @@ import { renderCatalog } from "./catalog/catalog.js";
 import { renderPickupPoints } from "./pickup/pickup.js";
 import { renderRates } from "./rates/rates.js";
 import { renderCustomers } from "./customers/customers.js";
+import { renderMarketing } from "./marketing/marketing.js";
 
 // --- Admin API client (separate token namespace from customer app) ---
 export const AdminApi = (() => {
@@ -125,6 +126,7 @@ export const AdminApi = (() => {
     deactivatePickupPoint: (id) =>
       request(`/pickup-points/${id}/deactivate`, { method: "PATCH" }),
     getCustomers: () => request("/auth/customers"),
+    sendMarketingBlast: (payload) => request("/push/admin/blast", { method: "POST", body: payload }),
   };
 })();
 
@@ -184,6 +186,7 @@ function renderShell() {
           <button data-tab="pickup">Pickup Points</button>
           <button data-tab="rates">Parcel Rates</button>
           <button data-tab="customers">Customers</button>
+          <button data-tab="marketing">Marketing</button>
         </nav>
         <div class="sidebar-user">
           ${escapeHtml(user?.name || "")}<br />
@@ -217,6 +220,7 @@ export async function goto(tab) {
     else if (tab === "pickup") await renderPickupPoints(view);
     else if (tab === "rates") await renderRates(view);
     else if (tab === "customers") await renderCustomers(view);
+    else if (tab === "marketing") await renderMarketing(view);
   } catch (err) {
     view.innerHTML = `<div class="empty-state">${err.message}</div>`;
   }

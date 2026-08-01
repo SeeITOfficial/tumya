@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const { requireAuth } = require('../lib/auth');
-const { VAPID_PUBLIC } = require('../lib/push');
+const { requireAuth, requireAdmin } = require('../lib/auth');
+const { VAPID_PUBLIC, notifyAllCustomers } = require('../lib/push');
 
 /**
  * GET /push/vapid-public-key
@@ -97,6 +97,29 @@ router.post('/unsubscribe', requireAuth, (req, res) => {
   res.json({
     ok: true
   });
+});
+
+/**
+ * POST /push/admin/blast
+ * Sends a push notification to all subscribed customers.
+ * Body: { title: string, body: string, url?: string }
+ */
+router.post('/admin/blast', requireAuth, requireAdmin, async (req, res) => {
+  const { title, body, url } = req.body;
+
+  if (!title || !body) {
+    return res.status(400).json({ error: 'Title and body are required' });
+  }
+
+  const payload = { title, body, url: url || '/' };
+  
+  try {
+    const result = await notifyAllCustomers(payload);
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    console.error('push /admin/blast error:', err);
+    res.status(500).json({ error: 'Failed to send notifications' });
+  }
 });
 
 module.exports = router;

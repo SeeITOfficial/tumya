@@ -195,7 +195,7 @@ export async function renderOrderDetail(id) {
     <div class="card" style="padding:16px; margin-top:16px;">
       <h3 style="font-size:14px; margin:0 0 10px;">History</h3>
       <ul class="timeline">
-        ${history.map((h) => `<li class="done"><div class="t-status">${h.status.replace(/_/g, " ")}</div>${h.note ? `<div style="font-size:13px;color:var(--ink-soft);">${escapeHtml(h.note)}</div>` : ""}<div class="t-time">${new Date(h.timestamp).toLocaleString()}</div></li>`).join("")}
+        ${history.map((h) => `<li class="done"><div class="t-status">${h.status.replace(/_/g, " ")}</div>${h.note ? `<div style="font-size:13px;color:var(--ink-soft);">${escapeHtml(h.note)}</div>` : ""}<div class="t-time">${new Date(h.timestamp + (h.timestamp.includes('Z') ? '' : 'Z')).toLocaleString()}</div></li>`).join("")}
       </ul>
     </div>
   `;

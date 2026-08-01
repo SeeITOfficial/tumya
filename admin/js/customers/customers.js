@@ -3,7 +3,7 @@ import { escapeHtml } from "../shared/utils.js";
 
 function formatDate(iso) {
   if (!iso) return "—";
-  const d = new Date(iso);
+  const d = new Date(iso + (iso.includes('Z') ? '' : 'Z'));
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
