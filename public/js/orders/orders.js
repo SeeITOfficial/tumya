@@ -348,6 +348,14 @@ export async function openOrderDetail(code = null) {
       historyReplaceClearTrack();
       renderOrders(view);
     };
+
+    const revealBtn = document.getElementById("customer-reveal-qr-btn");
+    if (revealBtn) {
+      revealBtn.onclick = () => {
+        document.getElementById("customer-qr-area").style.display = "block";
+        revealBtn.style.display = "none";
+      };
+    }
   } catch (err) {
     if (currentSignal.aborted || err.name === 'AbortError') return;
     
@@ -367,7 +375,6 @@ function paymentBlock(payment, order) {
   const method = payment?.method || order.payment_mode || "—";
   const status = payment?.status || "pending";
 
-  return `
     <div class="card order-detail-section">
       <h3 class="section-title" style="margin-top:0;">Payment</h3>
       <div class="detail-row">
@@ -386,6 +393,19 @@ function paymentBlock(payment, order) {
               <span>Reference</span>
               <strong>${escapeHtml(payment.reference_number)}</strong>
             </div>`
+          : ""
+      }
+      ${
+        (method === "cod_upi_scan" || method === "upi_scan") && status !== "verified"
+          ? `<div style="margin-top:20px; text-align:center;">
+               <button class="btn btn-outline" id="customer-reveal-qr-btn" style="width:100%;">Show QR Code to Pay</button>
+               <div id="customer-qr-area" style="display:none; margin-top:16px; background:#f9f9f9; padding:16px; border-radius:12px;">
+                 <p style="margin:0 0 12px; font-size:14px; color:var(--ink-soft); line-height:1.5;">
+                   Scan this with another phone, or take a screenshot and use "Scan from Gallery" in your UPI app.
+                 </p>
+                 <img src="/images/upi_qr.jpeg" alt="UPI QR" style="width:200px; max-width:100%; border-radius:12px; display:block; margin:0 auto;">
+               </div>
+             </div>`
           : ""
       }
     </div>
