@@ -202,8 +202,12 @@ router.get('/:id', requireAuth, requireAdmin, (req, res) => {
 
     const order = db
       .prepare(
-        `SELECT o.*, u.name AS customer_name, u.phone AS customer_phone
-         FROM orders o JOIN users u ON u.id = o.customer_id WHERE o.id = ?`
+        `SELECT o.*, u.name AS customer_name, u.phone AS customer_phone,
+                a.name AS handled_by_name
+         FROM orders o 
+         JOIN users u ON u.id = o.customer_id 
+         LEFT JOIN users a ON a.id = o.handled_by_admin_id
+         WHERE o.id = ?`
       )
       .get(req.params.id);
     if (!order) return res.status(404).json({ error: 'Order not found' });

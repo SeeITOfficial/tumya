@@ -88,9 +88,11 @@ async function updateStatus(
   const tx = db.transaction(() => {
     db.prepare(`
       UPDATE orders
-      SET status = ?, updated_at = datetime('now')
+      SET status = ?, 
+          updated_at = datetime('now'),
+          handled_by_admin_id = COALESCE(handled_by_admin_id, ?)
       WHERE id = ?
-    `).run(newStatus, orderId);
+    `).run(newStatus, changedBy || null, orderId);
 
     db.prepare(`
       INSERT INTO status_history

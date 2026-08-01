@@ -183,25 +183,10 @@ export async function renderOrderDetail(id) {
         </div>
 
         <div class="hero-section">
-
             <label>Handled By</label>
-
-            <select id="assign-select">
-
-                <option value="">
-                    — Unassigned —
-                </option>
-
-                ${admins.map(a => `
-                    <option
-                        value="${a.id}"
-                        ${order.handled_by_admin_id===a.id?"selected":""}>
-                        ${escapeHtml(a.name)}
-                    </option>
-                `).join("")}
-
-            </select>
-
+            <div style="font-weight:600; color:var(--ink); font-size:15px; margin-top:4px;">
+                ${order.handled_by_name ? escapeHtml(order.handled_by_name) : "<span style='color:var(--ink-soft); font-weight:400'>— Auto-assigned on confirmation —</span>"}
+            </div>
         </div>
 
     </div>
@@ -215,22 +200,9 @@ export async function renderOrderDetail(id) {
     </div>
   `;
 
-  document
-    .getElementById("back-btn")
-    .addEventListener("click", () => goto("orders"));
-  document
-    .getElementById("assign-select")
-    .addEventListener("change", async (e) => {
-      try {
-        await AdminApi.assignOrder(
-          order.id,
-          e.target.value ? Number(e.target.value) : null,
-        );
-        toast("Assigned");
-      } catch (err) {
-        toast(err.message, true);
-      }
-    });
+    document
+      .getElementById("back-btn")
+      .addEventListener("click", () => goto("orders"));
 
   wireOrderDetailActions(order, parcel, payment);
 }
