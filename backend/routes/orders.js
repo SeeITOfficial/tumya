@@ -148,6 +148,28 @@ router.get('/track/:trackingCode', (req, res) => {
 });
 
 /**
+ * Public: get a UPI deep link for a cod_upi_scan order so the customer can pay remotely
+ */
+router.get('/track/:trackingCode/upi-link', (req, res) => {
+  try {
+    const trackingCode = req.params.trackingCode?.trim();
+    if (!trackingCode) return res.status(400).json({ error: 'Invalid tracking code' });
+
+    const order = db.prepare(`SELECT * FROM orders WHERE tracking_code = ?`).get(trackingCode);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    if (order.payment_mode !== 'cod_upi_scan') return res.status(400).json({ error: 'Order does not use UPI scan payment' });
+
+    const payment = db.prepare(`SELECT * FROM payments WHERE order_id = ?`).get(order.id);
+    if (payment?.status === 'verified') return res.status(400).json({ error: 'Payment already verified' });
+
+    const link = buildUpiLink(order.total_amount, order.tracking_code);
+    res.json({ upi_link: link, amount: order.total_amount });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
  * Customer: list own orders
  */
 router.get('/mine', requireAuth, (req, res) => {

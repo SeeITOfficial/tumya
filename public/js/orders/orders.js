@@ -349,11 +349,24 @@ export async function openOrderDetail(code = null) {
       renderOrders(view);
     };
 
-    const revealBtn = document.getElementById("customer-reveal-qr-btn");
-    if (revealBtn) {
-      revealBtn.onclick = () => {
-        document.getElementById("customer-qr-area").style.display = "block";
-        revealBtn.style.display = "none";
+    const payUpiBtn = document.getElementById("customer-pay-upi-btn");
+    if (payUpiBtn) {
+      payUpiBtn.onclick = async (e) => {
+        e.preventDefault();
+        payUpiBtn.textContent = "Opening your UPI app…";
+        try {
+          const res = await fetch(`/api/orders/track/${order.tracking_code}/upi-link`);
+          if (!res.ok) throw new Error("Could not load payment link");
+          const { upi_link } = await res.json();
+          window.location.href = upi_link;
+          // Restore button text after a moment in case the app doesn't open
+          setTimeout(() => {
+            payUpiBtn.innerHTML = `💳 Pay ₹${Number(order.total_amount).toFixed(0)} via UPI`;
+          }, 3000);
+        } catch (err) {
+          payUpiBtn.innerHTML = `💳 Pay ₹${Number(order.total_amount).toFixed(0)} via UPI`;
+          alert("Could not open UPI app. Please try again.");
+        }
       };
     }
   } catch (err) {
@@ -375,6 +388,7 @@ function paymentBlock(payment, order) {
   const method = payment?.method || order.payment_mode || "—";
   const status = payment?.status || "pending";
 
+  return `
     <div class="card order-detail-section">
       <h3 class="section-title" style="margin-top:0;">Payment</h3>
       <div class="detail-row">
@@ -397,14 +411,16 @@ function paymentBlock(payment, order) {
       }
       ${
         (method === "cod_upi_scan" || method === "upi_scan") && status !== "verified"
-          ? `<div style="margin-top:20px; text-align:center;">
-               <button class="btn btn-outline" id="customer-reveal-qr-btn" style="width:100%;">Show QR Code to Pay</button>
-               <div id="customer-qr-area" style="display:none; margin-top:16px; background:#f9f9f9; padding:16px; border-radius:12px;">
-                 <p style="margin:0 0 12px; font-size:14px; color:var(--ink-soft); line-height:1.5;">
-                   Scan this with another phone, or take a screenshot and use "Scan from Gallery" in your UPI app.
-                 </p>
-                 <img src="/images/upi_qr.jpeg" alt="UPI QR" style="width:200px; max-width:100%; border-radius:12px; display:block; margin:0 auto;">
-               </div>
+          ? `<div style="margin-top:20px;">
+               <a id="customer-pay-upi-btn"
+                  href="#"
+                  class="btn"
+                  style="display:block; width:100%; text-align:center; background:var(--brand); color:#fff; font-size:16px; padding:16px; border-radius:14px; text-decoration:none; font-weight:700;">
+                 💳 Pay ₹${Number(order.total_amount).toFixed(0)} via UPI
+               </a>
+               <p style="margin:10px 0 0; font-size:12px; color:var(--ink-soft); text-align:center;">
+                 Opens GPay, PhonePe, Paytm or any UPI app with the amount ready
+               </p>
              </div>`
           : ""
       }
