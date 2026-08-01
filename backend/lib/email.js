@@ -259,11 +259,63 @@ async function sendOutForDelivery(order) {
 }
 
 async function sendOrderDelivered(order) {
-  return sendOrderStatusEmail(order, {
-    title: "Order Delivered 🎉",
-    status: "Delivered",
-    message:
-      "Your order has been delivered. Thank you for choosing Tumya.",
+  const { customerName, orderNumber, totalAmount, items = [], payment } = order;
+
+  const itemRows = items.length
+    ? items
+        .map(
+          (i) => `
+<tr>
+  <td style="padding:8px 4px;">${i.name || "Item"}</td>
+  <td style="padding:8px 4px; text-align:center;">×${i.qty}</td>
+  <td style="padding:8px 4px; text-align:right;">₹${Number(i.unit_price * i.qty).toFixed(0)}</td>
+</tr>`
+        )
+        .join("")
+    : `<tr><td colspan="3" style="padding:8px 4px; color:#888;">No item details</td></tr>`;
+
+  const paymentLine = payment
+    ? `<tr style="border-top:2px solid #ffe3c2;">
+        <td colspan="2" style="padding:10px 4px;"><strong>Total Paid</strong></td>
+        <td style="padding:10px 4px; text-align:right; font-weight:700; color:#ff7a00;">₹${Number(totalAmount || payment.amount).toFixed(0)}</td>
+      </tr>`
+    : "";
+
+  const html = emailLayout(
+    "Order Delivered 🎉",
+    `
+<p style="font-size:16px;color:#555;line-height:1.8;">
+Hello <strong>${customerName}</strong>,
+</p>
+
+<p style="font-size:16px;color:#555;line-height:1.8;">
+Your order has been delivered. Thank you for choosing Tumya!
+</p>
+
+<div style="background:#fff7ed;border:2px solid #ffe3c2;border-radius:12px;padding:22px;margin:30px 0;">
+<table width="100%" cellspacing="0" cellpadding="0">
+<tr>
+  <td style="padding:8px 4px;"><strong>Order</strong></td>
+  <td></td>
+  <td style="padding:8px 4px; text-align:right;"><strong>${orderNumber}</strong></td>
+</tr>
+<tr><td colspan="3"><hr style="border:none;border-top:1px solid #ffe3c2;margin:4px 0;"></td></tr>
+${itemRows}
+${paymentLine}
+</table>
+</div>
+
+<p style="font-size:14px;color:#888;line-height:1.8;">
+We hope you enjoy your purchase. If you have any questions, feel free to reach out to us.
+</p>
+`
+  );
+
+  return sendEmail({
+    to: order.email,
+    subject: `Tumya • Order Delivered 🎉`,
+    text: `Your order ${orderNumber} has been delivered. Total: ₹${Number(totalAmount).toFixed(0)}`,
+    html,
   });
 }
 

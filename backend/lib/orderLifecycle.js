@@ -147,13 +147,24 @@ async function updateStatus(
       });
       break;
 
-    case "delivered":
+    case "delivered": {
+      const items = db.prepare(`
+        SELECT oi.qty, oi.unit_price, ci.name
+        FROM order_items oi
+        LEFT JOIN catalog_items ci ON ci.id = oi.catalog_item_id
+        WHERE oi.order_id = ?
+      `).all(orderId);
+      const payment = db.prepare(`SELECT * FROM payments WHERE order_id = ?`).get(orderId);
       await sendOrderDelivered({
         email: updatedOrder.email,
         customerName: updatedOrder.customerName,
         orderNumber: updatedOrder.tracking_code,
+        totalAmount: updatedOrder.total_amount,
+        items,
+        payment,
       });
       break;
+    }
   }
 
   return updatedOrder;

@@ -277,14 +277,14 @@ function catalogOrderDetailHtml(order, items, payment) {
       </div>
 
       <div style="margin-top:16px;">
-        ${catalogNextAction(order)}
+        ${catalogNextAction(order, payment)}
       </div>
     </div>
     ${locationBlock(order)}
   `;
 }
 
-function catalogNextAction(order) {
+function catalogNextAction(order, payment) {
 
     switch (order.status) {
 
@@ -303,17 +303,20 @@ function catalogNextAction(order) {
         case "confirmed":
             return `<button class="btn btn-sm" onclick="advanceOrder(${order.id}, 'out_for_delivery')">Start Delivery</button>`;
 
-        case "out_for_delivery":
+        case "out_for_delivery": {
+            const isPaid = payment?.status === "verified";
             return `
                 <button
                     class="btn btn-block"
                     id="status-update-btn"
-                    data-next="delivered">
+                    data-next="delivered"
+                    ${!isPaid ? 'disabled title="Mark the order as paid first"' : ''}>
 
-                    Mark Delivered
+                    ${!isPaid ? '🔒 Complete Delivery (Pay first)' : 'Complete Delivery'}
 
                 </button>
             `;
+        }
 
         case "delivered":
             return `
@@ -606,8 +609,16 @@ function wireOrderDetailActions(order, parcel, payment) {
     confirmPaymentBtn.addEventListener("click", async () => {
       try {
         await AdminApi.confirmCodPayment(order.id);
-        toast("Marked paid");
-        renderOrderDetail(order.id);
+        toast("Marked paid ✓");
+        // Remove the Mark Paid button
+        confirmPaymentBtn.remove();
+        // Enable the Complete Delivery button if it exists
+        const deliverBtn = document.getElementById("status-update-btn");
+        if (deliverBtn && deliverBtn.dataset.next === "delivered") {
+          deliverBtn.disabled = false;
+          deliverBtn.title = "";
+          deliverBtn.textContent = "Complete Delivery";
+        }
       } catch (err) {
         toast(err.message, true);
       }
