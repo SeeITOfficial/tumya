@@ -4,8 +4,7 @@ const express = require("express");
 const cors = require("cors");
 const path = require("path");
 const rateLimit = require("express-rate-limit");
-const { webhooksRouter } = require('./routes/webhooks');
-const { startJobs } = require('./lib/jobs');
+const { startJobs } = require("./lib/jobs");
 
 const app = express();
 
@@ -14,10 +13,12 @@ app.disable("x-powered-by");
 // ---------------------------------------------------------------------------
 // CORS — lock to our own domain; override via CORS_ORIGIN in .env for local dev
 // ---------------------------------------------------------------------------
-app.use(cors({
-  origin: process.env.CORS_ORIGIN || "https://tumya.app",
-  credentials: true,
-}));
+app.use(
+  cors({
+    origin: process.env.CORS_ORIGIN || "https://tumya.app",
+    credentials: true,
+  }),
+);
 
 // ---------------------------------------------------------------------------
 // Rate limiters
@@ -25,7 +26,9 @@ app.use(cors({
 
 /** Shared JSON error handler so the frontend toast picks it up correctly. */
 const rateLimitHandler = (req, res) => {
-  res.status(429).json({ error: "Too many requests. Please wait a moment and try again." });
+  res
+    .status(429)
+    .json({ error: "Too many requests. Please wait a moment and try again." });
 };
 
 /** General auth limiter — 5 requests per 15 minutes per IP */
@@ -35,7 +38,7 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   handler: rateLimitHandler,
-  skip: (req) => req.originalUrl.includes('/admin/login'),
+  skip: (req) => req.originalUrl.includes("/admin/login"),
 });
 
 /** Admin login limiter — 20 requests per 15 minutes per IP */
@@ -73,15 +76,9 @@ app.use("/api/push", require("./routes/push"));
 app.use("/api/notifications", require("./routes/notifications"));
 
 // Static Assets
-app.use(
-  "/uploads",
-  express.static(path.join(__dirname, "public", "uploads"))
-);
+app.use("/uploads", express.static(path.join(__dirname, "public", "uploads")));
 
-app.use(
-  "/images",
-  express.static(path.join(__dirname, "public", "images"))
-);
+app.use("/images", express.static(path.join(__dirname, "public", "images")));
 
 // Health Check
 app.get("/api/health", (req, res) => {
@@ -92,27 +89,18 @@ app.get("/api/health", (req, res) => {
 });
 
 // Frontend
-app.use(
-  "/admin",
-  express.static(path.join(__dirname, "..", "admin"))
-);
+app.use("/admin", express.static(path.join(__dirname, "..", "admin")));
 
-app.use(
-  express.static(path.join(__dirname, "..", "public"))
-);
+app.use(express.static(path.join(__dirname, "..", "public")));
 
 // Admin SPA
 app.get("/admin", (req, res) => {
-  res.sendFile(
-    path.join(__dirname, "..", "admin", "index.html")
-  );
+  res.sendFile(path.join(__dirname, "..", "admin", "index.html"));
 });
 
 // Customer SPA
 app.get("/", (req, res) => {
-  res.sendFile(
-    path.join(__dirname, "..", "public", "index.html")
-  );
+  res.sendFile(path.join(__dirname, "..", "public", "index.html"));
 });
 
 // 404
