@@ -7,7 +7,7 @@ const rateLimit = require("express-rate-limit");
 const { startJobs } = require("./lib/jobs");
 
 const app = express();
-
+app.set("trust proxy", 1);
 app.disable("x-powered-by");
 
 // ---------------------------------------------------------------------------
