@@ -111,6 +111,64 @@ export function addToCart(itemId) {
   closeProduct();
 }
 
+// Shared qty +/- handler for the cart page. Decrementing to 0 removes the
+// item entirely. Re-renders the cart page, badge, and bar so everything
+// stays in sync after every click.
+function changeCartQty(type, itemId, delta) {
+  const list = type === "booking" ? cart.bookingItems : cart.orderItems;
+  const idx = list.findIndex((c) => String(c.item.id) === String(itemId));
+  if (idx === -1) return;
+
+  list[idx].qty += delta;
+
+  if (list[idx].qty <= 0) {
+    list.splice(idx, 1);
+  }
+
+  saveCart();
+  updateCartBadge();
+  renderCartBar();
+  renderCartPage();
+}
+
+function qtyControlsHtml(type, item, qty) {
+  return `
+    <div class="cart-qty-controls" style="display:flex;align-items:center;gap:10px;margin-top:6px;">
+      <button
+        type="button"
+        class="qty-btn qty-minus"
+        data-cart-type="${type}"
+        data-item-id="${item.id}"
+        data-delta="-1"
+        aria-label="Decrease quantity"
+        style="width:28px;height:28px;border-radius:50%;border:1.5px solid rgba(242,104,10,0.3);background:#fff;font-size:16px;line-height:1;cursor:pointer;"
+      >−</button>
+      <span class="checkout-item-qty">${qty}</span>
+      <button
+        type="button"
+        class="qty-btn qty-plus"
+        data-cart-type="${type}"
+        data-item-id="${item.id}"
+        data-delta="1"
+        aria-label="Increase quantity"
+        style="width:28px;height:28px;border-radius:50%;border:1.5px solid rgba(242,104,10,0.3);background:#fff;font-size:16px;line-height:1;cursor:pointer;"
+      >+</button>
+    </div>
+  `;
+}
+
+function wireQtyControls() {
+  document.querySelectorAll(".qty-btn").forEach((btn) => {
+    btn.onclick = () => {
+      changeCartQty(
+        btn.dataset.cartType,
+        btn.dataset.itemId,
+        Number(btn.dataset.delta),
+      );
+    };
+  });
+}
+
 export function renderCartBar() {
   const bar = document.getElementById("cart-bar");
   if (!bar) return;
@@ -252,16 +310,16 @@ function grabCurrentLocation() {
     (pos) => {
       const { latitude, longitude, accuracy } = pos.coords;
       const isImprecise = accuracy > 5000;
-      
+
       checkoutLocation.delivery_lat = latitude;
       checkoutLocation.delivery_lng = longitude;
-      
+
       if (isImprecise) {
         statusEl.innerHTML = `⚠️ Location is imprecise (±${Math.round(accuracy / 1000)}km). Fetching approximate area...`;
       } else {
         statusEl.textContent = `✅ Location captured (±${Math.round(accuracy)}m accuracy). Fetching address...`;
       }
-      
+
       if (geocodeController) {
         geocodeController.abort();
       }
@@ -495,7 +553,7 @@ async function createBookings(order, bookingItems) {
     cart.bookingItems = [];
     saveCart();
     updateCartBadge();  
-    
+
     document
       .getElementById("back-home-btn")
       .addEventListener("click", () => goto("home"));
@@ -574,7 +632,7 @@ export function renderCartPage() {
               <div class="checkout-row">
                 <div class="checkout-item-details">
                   <div class="checkout-item-name">${escapeHtml(c.item.name)}</div>
-                  <div class="checkout-item-qty">Qty: ${c.qty}</div>
+                  ${qtyControlsHtml("order", c.item, c.qty)}
                 </div>
                 <div class="checkout-item-price">
                   ₹${(c.item.price * c.qty).toFixed(2)}
@@ -612,7 +670,7 @@ export function renderCartPage() {
               <div class="checkout-row">
                 <div class="checkout-item-details">
                   <div class="checkout-item-name">${escapeHtml(c.item.name)}</div>
-                  <div class="checkout-item-qty">Qty: ${c.qty}</div>
+                  ${qtyControlsHtml("booking", c.item, c.qty)}
                 </div>
                 <div class="checkout-item-price">
                   Booking
@@ -676,4 +734,6 @@ export function renderCartPage() {
         )
       );
   }
-}
+
+  wireQtyControls();
+}   

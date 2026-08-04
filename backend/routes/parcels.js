@@ -16,6 +16,12 @@ const {
   verifyPayment,
 } = require("../lib/payments");
 
+const {
+  isQuoteLocked,
+  calculateSuggestedAmount,
+  applyParcelQuote,
+} = require("../lib/parcelQuote");
+
 // Reserved for future image upload support
 // const { upload, saveImage } = require("../lib/upload");
 
@@ -217,6 +223,7 @@ router.post("/", requireAuth, (req, res) => {
  * POST /:orderId/weigh
  * Admin records the physical weight of a parcel. Calculates a suggested quote
  * amount based on the current rate_config for the parcel's direction.
+ * Weight-only update; use quote-update to save the final quote in one step.
  */
 router.post("/:orderId/weigh", requireAuth, requireAdmin, async (req, res) => {
   if (!isPositiveInteger(req.params.orderId)) {
@@ -231,6 +238,18 @@ router.post("/:orderId/weigh", requireAuth, requireAdmin, async (req, res) => {
     });
   }
 
+  const order = db
+    .prepare("SELECT * FROM orders WHERE id=?")
+    .get(req.params.orderId);
+
+  if (!order) {
+    return res.status(404).json({ error: "Order not found" });
+  }
+
+  if (isQuoteLocked(order.status)) {
+    return res.status(400).json({ error: "Quote is locked after shipment has started" });
+  }
+
   const parcel = db
     .prepare("SELECT * FROM parcels WHERE order_id=?")
     .get(req.params.orderId);
@@ -239,27 +258,11 @@ router.post("/:orderId/weigh", requireAuth, requireAdmin, async (req, res) => {
     return res.status(404).json({ error: "Parcel not found" });
   }
 
-  const rate = db
-    .prepare("SELECT * FROM rate_config WHERE direction=?")
-    .get(parcel.direction);
-
-  let suggested = null;
-  let inrRate = 1;
-
-  if (rate) {
-    try {
-      const response = await fetch("https://api.exchangerate-api.com/v4/latest/USD");
-      const data = await response.json();
-      if (data && data.rates && data.rates.INR) {
-        inrRate = data.rates.INR;
-      }
-    } catch (e) {
-      console.error("Failed to fetch exchange rate", e);
-      inrRate = 83.5; // fallback rate
-    }
-    
-    // Calculate final suggested amount in INR: weight * rate_per_kg (USD) * INR exchange rate
-    suggested = Math.round(weight_kg * rate.rate_per_kg * inrRate * 100) / 100;
+  let calc;
+  try {
+    calc = await calculateSuggestedAmount(weight_kg, parcel.direction);
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to calculate suggested amount" });
   }
 
   try {
@@ -269,19 +272,76 @@ router.post("/:orderId/weigh", requireAuth, requireAdmin, async (req, res) => {
         weight_kg=?,
         suggested_amount=?
       WHERE order_id=?
-    `).run(weight_kg, suggested, req.params.orderId);
+    `).run(weight_kg, calc.suggested_amount, req.params.orderId);
   } catch (err) {
     return res.status(500).json({ error: "Failed to update parcel weight" });
   }
 
   res.json({
     weight_kg,
-    suggested_amount: suggested,
-    currency: 'INR', // Forced to INR since we convert
-    rate_per_kg: rate?.rate_per_kg ?? null,
-    inr_rate_used: inrRate,
+    suggested_amount: calc.suggested_amount,
+    currency: "INR",
+    rate_per_kg: calc.rate_per_kg,
+    inr_rate_used: calc.inr_rate_used,
   });
 });
+
+/* -------------------------------------------------------------------------- */
+/*                     ADMIN WEIGH + QUOTE (UNIFIED)                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * POST /:orderId/quote-update
+ * Admin sets weight and optional custom quote override in one step.
+ * If custom_amount is omitted or empty, the auto-calculated amount is used.
+ */
+router.post(
+  "/:orderId/quote-update",
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
+    if (!isPositiveInteger(req.params.orderId)) {
+      return res.status(400).json({ error: "Invalid order ID" });
+    }
+
+    const { weight_kg, custom_amount } = req.body;
+
+    if (!isPositiveFinite(weight_kg)) {
+      return res.status(400).json({
+        error: "weight_kg must be a finite number greater than zero",
+      });
+    }
+
+    if (
+      custom_amount != null &&
+      custom_amount !== "" &&
+      !isPositiveFinite(custom_amount)
+    ) {
+      return res.status(400).json({
+        error: "custom_amount must be a finite number greater than zero when provided",
+      });
+    }
+
+    const customValue =
+      custom_amount != null && custom_amount !== ""
+        ? Number(custom_amount)
+        : null;
+
+    try {
+      const result = await applyParcelQuote(req.params.orderId, {
+        weight_kg,
+        custom_amount: customValue,
+        adminId: req.user.id,
+      });
+
+      res.json(result);
+    } catch (err) {
+      const isBusinessError =
+        err.message && !err.message.toLowerCase().includes("sqlite");
+      res.status(isBusinessError ? 400 : 500).json({ error: err.message });
+    }
+  }
+);
 
 /* -------------------------------------------------------------------------- */
 /*                                ADMIN QUOTE                                 */
@@ -290,7 +350,8 @@ router.post("/:orderId/weigh", requireAuth, requireAdmin, async (req, res) => {
 /**
  * POST /:orderId/quote
  * Admin sets the final quoted price for a weighed parcel and advances the
- * order status to "quoted".
+ * order status to "quoted". Backward-compatible; prefer quote-update for
+ * weight + optional custom override in one request.
  */
 router.post("/:orderId/quote", requireAuth, requireAdmin, async (req, res) => {
   if (!isPositiveInteger(req.params.orderId)) {
@@ -303,6 +364,18 @@ router.post("/:orderId/quote", requireAuth, requireAdmin, async (req, res) => {
     return res.status(400).json({
       error: "quote_amount must be a finite number greater than zero",
     });
+  }
+
+  const order = db
+    .prepare("SELECT * FROM orders WHERE id=?")
+    .get(req.params.orderId);
+
+  if (!order) {
+    return res.status(404).json({ error: "Order not found" });
+  }
+
+  if (isQuoteLocked(order.status)) {
+    return res.status(400).json({ error: "Quote is locked after shipment has started" });
   }
 
   const parcel = db
@@ -318,33 +391,16 @@ router.post("/:orderId/quote", requireAuth, requireAdmin, async (req, res) => {
   }
 
   try {
-    db.prepare(`
-      UPDATE parcels
-      SET
-        quote_amount=?,
-        quoted_at=datetime('now'),
-        quoted_by=?
-      WHERE order_id=?
-    `).run(quote_amount, req.user.id, req.params.orderId);
-
-    db.prepare(`
-      UPDATE orders
-      SET total_amount=?
-      WHERE id=?
-    `).run(quote_amount, req.params.orderId);
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to save quote" });
-  }
-
-  try {
-    const order = await updateStatus(req.params.orderId, "quoted", {
-      note: `Quoted at ${quote_amount}`,
-      changedBy: req.user.id,
+    const result = await applyParcelQuote(req.params.orderId, {
+      weight_kg: parcel.weight_kg,
+      custom_amount: Number(quote_amount),
+      adminId: req.user.id,
     });
 
-    res.json(order);
+    res.json(result.order);
   } catch (err) {
-    const isBusinessError = err.message && !err.message.toLowerCase().includes("sqlite");
+    const isBusinessError =
+      err.message && !err.message.toLowerCase().includes("sqlite");
     res.status(isBusinessError ? 400 : 500).json({ error: err.message });
   }
 });

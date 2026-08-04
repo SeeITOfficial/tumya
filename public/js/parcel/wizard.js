@@ -26,14 +26,22 @@ export async function renderParcelForm(view) {
   renderParcelStep(view);
 }
 
+// Internal step 7 has no screen of its own for uganda_to_india — it's a
+// pure pass-through straight to review (see case 7 below), so the user only
+// ever sees 7 distinct screens on that flow, not 8. Progress label needs to
+// reflect what's actually shown, not the raw internal step count, or the
+// last screen reads "Step 8 of 8" after only 7 screens were seen.
 function progressLabel(step) {
-  return `Step ${step} of ${TOTAL_STEPS}`;
+  const direction = parcelWizard.data.direction;
+  const skipsStep7 = direction === "uganda_to_india";
+
+  const total = skipsStep7 ? TOTAL_STEPS - 1 : TOTAL_STEPS;
+  const display = skipsStep7 && step > 7 ? step - 1 : step;
+
+  return `Step ${display} of ${total}`;
 }
 
 // Small shared "back" link, added consistently from step 2 onward.
-// Every path is now a strict 1-8 sequence (no more skip-cases), so a plain
-// decrement is always correct — no special-casing needed like the original
-// review-step back button had to do for the old "self skips step 5" gap.
 function backLinkHtml() {
   return `<button class="wizard-back" id="wizard-back-btn" type="button">&larr;</button>`;
 }
@@ -58,9 +66,20 @@ function pickupPointOptionsHtml() {
 }
 
 // Renders the location-capture sub-step used whenever "Tumya" collects/delivers
-// at the ORIGIN side. Shared by both directions since the real-world need
-// (agent needs a pickup location) is identical regardless of direction.
-function renderCollectLocationStep(view, title) {
+// at the ORIGIN or DESTINATION side. Shared across origin (step 5) and
+// India-destination (step 6 / step 7) uses.
+//
+// allowCurrentLocation lets a caller suppress "Use Current Location" when the
+// device filling out the form isn't physically at the location being
+// captured (e.g. a receiver in India specifying a pickup point in Uganda).
+function renderCollectLocationStep(
+  view,
+  title,
+  addressKey = "pickup_address",
+  latKey = "pickup_lat",
+  lngKey = "pickup_lng",
+  allowCurrentLocation = true,
+) {
   view.innerHTML = `
     <div class="wizard">
       ${backLinkHtml()}
@@ -68,11 +87,15 @@ function renderCollectLocationStep(view, title) {
       <h2 class="wizard-title">${title}</h2>
 
       <div class="wizard-options">
-        <button class="wizard-card" id="current-location">
-          📍
-          <br><br>
-          Use Current Location
-        </button>
+        ${
+          allowCurrentLocation
+            ? `<button class="wizard-card" id="current-location">
+                📍
+                <br><br>
+                Use Current Location
+              </button>`
+            : ""
+        }
 
         <button class="wizard-card" id="search-location">
           🔎
@@ -93,70 +116,155 @@ function renderCollectLocationStep(view, title) {
 
   wireBackLink(view);
 
-  document.getElementById("current-location").onclick = () => {
-    if (!navigator.geolocation) {
-      toast("Geolocation isn't supported on this device.", true);
-      return;
-    }
+  const currentLocationBtn = document.getElementById("current-location");
+  if (currentLocationBtn) {
+    currentLocationBtn.onclick = () => {
+      if (!navigator.geolocation) {
+        toast("Geolocation isn't supported on this device.", true);
+        return;
+      }
 
-    // Geolocation silently refuses on plain HTTP (except localhost) — this is
-    // the most common real cause of "Couldn't get your location" and, unlike
-    // a permission denial, the browser gives no other signal for it, so we
-    // check for it explicitly and tell the user the real reason.
-    if (!window.isSecureContext) {
-      toast(
-        "Location access needs a secure (https) connection. Please enter the address manually instead.",
-        true,
+      // Geolocation silently refuses on plain HTTP (except localhost) — this is
+      // the most common real cause of "Couldn't get your location" and, unlike
+      // a permission denial, the browser gives no other signal for it, so we
+      // check for it explicitly and tell the user the real reason.
+      if (!window.isSecureContext) {
+        toast(
+          "Location access needs a secure (https) connection. Please enter the address manually instead.",
+          true,
+        );
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude, accuracy } = pos.coords;
+          parcelWizard.data[addressKey] = `${latitude}, ${longitude}`;
+          parcelWizard.data[latKey] = latitude;
+          parcelWizard.data[lngKey] = longitude;
+
+          if (accuracy > 5000) {
+            // City-level accuracy — likely IP-based, not GPS. Warn the user.
+            toast(
+              `⚠️ Location is only accurate to ~${Math.round(accuracy / 1000)}km. This may be your city, not your exact location. Please use "Enter Manually" for a precise address.`,
+              true,
+            );
+          }
+
+          parcelWizard.step += 1;
+          renderParcelStep(view);
+        },
+        (err) => {
+          let msg = "Couldn't get your location. Please enter it manually instead.";
+          if (err.code === err.PERMISSION_DENIED) {
+            msg = "Location access was denied. Please allow location access in your browser settings, or enter the address manually.";
+          } else if (err.code === err.POSITION_UNAVAILABLE) {
+            msg = "Your location couldn't be determined right now. Please enter the address manually.";
+          } else if (err.code === err.TIMEOUT) {
+            msg = "Location request timed out. Please try again or enter the address manually.";
+          }
+          toast(msg, true);
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
       );
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const { latitude, longitude, accuracy } = pos.coords;
-        if (accuracy > 5000) {
-          // City-level accuracy — likely IP-based, not GPS. Warn the user.
-          toast(
-            `⚠️ Location is only accurate to ~${Math.round(accuracy / 1000)}km. This may be your city, not your exact location. Please use "Enter Manually" for a precise address.`,
-            true,
-          );
-          // Save coords anyway so admin sees a rough area
-          parcelWizard.data.pickup_address = `${latitude}, ${longitude}`;
-          parcelWizard.step += 1;
-          renderParcelStep(view);
-        } else {
-          parcelWizard.data.pickup_address = `${latitude}, ${longitude}`;
-          parcelWizard.step += 1;
-          renderParcelStep(view);
-        }
-      },
-      (err) => {
-        let msg = "Couldn't get your location. Please enter it manually instead.";
-        if (err.code === err.PERMISSION_DENIED) {
-          msg = "Location access was denied. Please allow location access in your browser settings, or enter the address manually.";
-        } else if (err.code === err.POSITION_UNAVAILABLE) {
-          msg = "Your location couldn't be determined right now. Please enter the address manually.";
-        } else if (err.code === err.TIMEOUT) {
-          msg = "Location request timed out. Please try again or enter the address manually.";
-        }
-        toast(msg, true);
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
-    );
-  };
+    };
+  }
 
   document.getElementById("search-location").onclick = () => {
     document.getElementById("location-extra").innerHTML = `
-      <label>Search</label>
-      <input id="search-box" placeholder="Coming in next step...">
-      <button class="btn btn-block" id="continue-search">Continue</button>
+      <label>Search for a place</label>
+
+      <input
+        id="search-box"
+        placeholder="Search street, landmark or building..."
+        autocomplete="off"
+      >
+
+      <div
+        id="search-results"
+        style="
+          margin-top:10px;
+          border:1px solid #eee;
+          border-radius:12px;
+          overflow:hidden;
+        "
+      ></div>
     `;
 
-    document.getElementById("continue-search").onclick = () => {
-      parcelWizard.data.pickup_address = document.getElementById("search-box").value;
-      parcelWizard.step += 1;
-      renderParcelStep(view);
+    const input = document.getElementById("search-box");
+    const results = document.getElementById("search-results");
+
+    let timer;
+
+    input.oninput = () => {
+
+      clearTimeout(timer);
+
+      const q = input.value.trim();
+
+      if (q.length < 3) {
+        results.innerHTML = "";
+        return;
+      }
+
+      timer = setTimeout(async () => {
+
+        try {
+
+          const r = await fetch(
+            `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=${encodeURIComponent(q)}`
+          );
+
+          const places = await r.json();
+
+          results.innerHTML = places.map(place => `
+            <div
+              class="search-result"
+              data-lat="${place.lat}"
+              data-lon="${place.lon}"
+              data-address="${place.display_name}"
+              style="
+                padding:14px;
+                border-bottom:1px solid #eee;
+                cursor:pointer;
+              "
+            >
+              📍 ${place.display_name}
+            </div>
+          `).join("");
+
+          document.querySelectorAll(".search-result").forEach(item => {
+
+            item.onclick = () => {
+
+              parcelWizard.data[addressKey] =
+                item.dataset.address;
+
+              parcelWizard.data[latKey] =
+                Number(item.dataset.lat);
+
+              parcelWizard.data[lngKey] =
+                Number(item.dataset.lon);
+
+              parcelWizard.step += 1;
+
+              renderParcelStep(view);
+
+            };
+
+          });
+
+        } catch {
+
+          results.innerHTML =
+            "<div style='padding:12px'>No results found.</div>";
+
+        }
+
+      },300);
+
     };
+
   };
 
   document.getElementById("manual-location").onclick = () => {
@@ -167,7 +275,7 @@ function renderCollectLocationStep(view, title) {
     `;
 
     document.getElementById("continue-manual").onclick = () => {
-      parcelWizard.data.pickup_address = document.getElementById("manual-address").value;
+      parcelWizard.data[addressKey] = document.getElementById("manual-address").value;
       parcelWizard.step += 1;
       renderParcelStep(view);
     };
@@ -222,8 +330,7 @@ function renderBodaStep(view, title, keys) {
 }
 
 // Fixed pickup-point selection sub-step — used for "Self Drop-off" on either
-// side. Previously this option never captured a location at all; now it
-// reuses the same admin-configured pickup points shown elsewhere in the app.
+// side.
 function renderPointSelectStep(view, title, dataKey) {
   view.innerHTML = `
     <div class="wizard">
@@ -247,39 +354,6 @@ function renderPointSelectStep(view, title, dataKey) {
       return;
     }
     parcelWizard.data[dataKey] = Number(select.value);
-    parcelWizard.step += 1;
-    renderParcelStep(view);
-  };
-}
-
-// Plain manual address entry — used for the India-side destination
-// (Uganda -> India), where there's no "current location" to fetch since
-// the sender isn't physically at the recipient's address.
-function renderAddressStep(view, title, dataKey) {
-  const existing = parcelWizard.data[dataKey] || "";
-
-  view.innerHTML = `
-    <div class="wizard">
-      ${backLinkHtml()}
-      <div class="wizard-progress">${progressLabel(parcelWizard.step)}</div>
-      <h2 class="wizard-title">${title}</h2>
-
-      <label>Address</label>
-      <textarea id="dest-address" rows="4" placeholder="Enter full address">${escapeHtml(existing)}</textarea>
-
-      <button class="btn btn-block" id="continue-address" style="margin-top:18px;">Continue</button>
-    </div>
-  `;
-
-  wireBackLink(view);
-
-  document.getElementById("continue-address").onclick = () => {
-    const value = document.getElementById("dest-address").value.trim();
-    if (!value) {
-      toast("Please enter an address.", true);
-      return;
-    }
-    parcelWizard.data[dataKey] = value;
     parcelWizard.step += 1;
     renderParcelStep(view);
   };
@@ -350,7 +424,7 @@ export function renderParcelStep(view) {
               <div class="wizard-text">Receive something from another country.</div>
             </button>
           </div>
-          
+
           <div style="margin-top: 40px; padding: 10px 0; text-align: center; pointer-events: none; user-select: none; overflow: hidden;">
             <svg width="100%" height="160" viewBox="0 0 400 160" style="max-width: 100%; display: block; margin: 0 auto;">
               <defs>
@@ -360,14 +434,14 @@ export function renderParcelStep(view) {
                 <path id="topArc" d="M -30,-6 A 30,30 0 0,1 30,-6" fill="none" />
                 <path id="bottomArc" d="M 26,14 A 28,28 0 0,1 -26,14" fill="none" />
               </defs>
-              
+
               <rect width="100%" height="100%" fill="url(#dotGrid)" />
-              
+
               <!-- Wavy postal cancellation lines -->
               <path d="M -20 80 Q 80 50 180 80 T 420 80" fill="none" stroke="var(--ink)" stroke-width="2.5" opacity="0.04"/>
               <path d="M -20 95 Q 80 65 180 95 T 420 95" fill="none" stroke="var(--ink)" stroke-width="2.5" opacity="0.04"/>
               <path d="M -20 110 Q 80 80 180 110 T 420 110" fill="none" stroke="var(--ink)" stroke-width="2.5" opacity="0.04"/>
-              
+
               <!-- Big text -->
               <text x="180" y="85" text-anchor="middle" font-family="Plus Jakarta Sans, sans-serif" font-weight="900" font-size="46" fill="var(--ink)" opacity="0.04" letter-spacing="2">
                 DISTANCE
@@ -381,7 +455,7 @@ export function renderParcelStep(view) {
                 <!-- Outer Rings -->
                 <circle cx="0" cy="0" r="50" fill="rgba(242, 104, 10, 0.04)" stroke="var(--orange-600)" stroke-width="4" opacity="0.45"/>
                 <circle cx="0" cy="0" r="44" fill="none" stroke="var(--orange-600)" stroke-width="1.5" stroke-dasharray="5 3" opacity="0.45"/>
-                
+
                 <!-- Circular Text -->
                 <text fill="var(--orange-600)" font-family="monospace" font-weight="bold" font-size="9" opacity="0.55" letter-spacing="1">
                   <textPath href="#topArc" startOffset="50%" text-anchor="middle">EXPRESS ✈ LOGISTICS</textPath>
@@ -494,11 +568,13 @@ export function renderParcelStep(view) {
       break;
     }
 
-    // --- STEP 4: origin/collection method. Same 3 options regardless of
-    // direction — the "origin" is India for india_to_uganda, Uganda for
-    // uganda_to_india. Copy adapts to mode (send vs receive framing). ---
+    // --- STEP 4: origin/collection method. India has no boda (motorcycle
+    // taxi) network, so when direction is india_to_uganda (origin = India)
+    // that option is dropped and only Tumya Pickup / Self Drop-off show. ---
     case 4: {
-      const title = isReceive ? "How will it reach Tumya office?" : "How should we collect it?";
+      const title = isReceive ? "How will it reach Tumya office?" : "How will it reach Tumya?";
+      const showBoda = direction !== "india_to_uganda";
+
       view.innerHTML = `
         <div class="wizard">
           ${backLinkHtml()}
@@ -508,20 +584,24 @@ export function renderParcelStep(view) {
           <div class="wizard-options">
             <button class="wizard-card" id="tumya-delivery">
               <div class="wizard-icon">🚚</div>
-              <div class="wizard-heading">Tumya Delivery</div>
+              <div class="wizard-heading">Tumya Pickup</div>
               <div class="wizard-text">We'll collect it.</div>
             </button>
 
-            <button class="wizard-card" id="my-boda">
-              <div class="wizard-icon">🛵</div>
-              <div class="wizard-heading">My Boda</div>
-              <div class="wizard-text">My rider will hand it over.</div>
-            </button>
+            ${
+              showBoda
+                ? `<button class="wizard-card" id="my-boda">
+                    <div class="wizard-icon">🛵</div>
+                    <div class="wizard-heading">My Boda</div>
+                    <div class="wizard-text">My rider will hand it over to Tumya.</div>
+                  </button>`
+                : ""
+            }
 
             <button class="wizard-card" id="self-drop">
               <div class="wizard-icon">📍</div>
               <div class="wizard-heading">Self Drop-off</div>
-              <div class="wizard-text">I'll drop it at a Tumya point.</div>
+              <div class="wizard-text">Someone will drop it at a Tumya point.</div>
             </button>
           </div>
         </div>
@@ -535,11 +615,14 @@ export function renderParcelStep(view) {
         renderParcelStep(view);
       };
 
-      document.getElementById("my-boda").onclick = () => {
-        parcelWizard.data.pickup = "boda";
-        parcelWizard.step = 5;
-        renderParcelStep(view);
-      };
+      const bodaBtn = document.getElementById("my-boda");
+      if (bodaBtn) {
+        bodaBtn.onclick = () => {
+          parcelWizard.data.pickup = "boda";
+          parcelWizard.step = 5;
+          renderParcelStep(view);
+        };
+      }
 
       document.getElementById("self-drop").onclick = () => {
         parcelWizard.data.pickup = "self";
@@ -552,8 +635,19 @@ export function renderParcelStep(view) {
     // --- STEP 5: origin sub-detail, branches on the step-4 choice. ---
     case 5: {
       if (parcelWizard.data.pickup === "tumya") {
-        const title = isReceive ? "Where should Tumya find it?" : "Where should we collect it?";
-        renderCollectLocationStep(view, title);
+        // Origin (pickup) is always in Uganda. If the person filling this
+        // form is the receiver on an uganda_to_india parcel, they're
+        // physically in India — "Use Current Location" would capture the
+        // wrong country, so it's hidden in that one case.
+        const allowCurrentLocation = !(isReceive && direction === "uganda_to_india");
+        renderCollectLocationStep(
+          view,
+          "Where should Tumya find it?",
+          "pickup_address",
+          "pickup_lat",
+          "pickup_lng",
+          allowCurrentLocation,
+        );
       } else if (parcelWizard.data.pickup === "boda") {
         renderBodaStep(view, "Tell us about your rider", {
           name: "boda_name",
@@ -618,17 +712,28 @@ export function renderParcelStep(view) {
           renderParcelStep(view);
         };
       } else {
-        const title = isReceive ? "Where should we deliver it to you in India?" : "Where is it going in India?";
-        renderAddressStep(view, title, "drop_address");
+        const title = isReceive
+          ? "Where are you in India?"
+          : "Where is it going in India?";
+
+        renderCollectLocationStep(view, title, "drop_address", "drop_lat", "drop_lng");
       }
       break;
     }
 
-    // --- STEP 7: destination sub-detail. ---
+    // --- STEP 7: destination sub-detail (india_to_uganda only). For
+    // uganda_to_india there's no sub-detail — step 6 already collected the
+    // India address directly — so this just forwards straight to review. ---
     case 7: {
       if (direction === "india_to_uganda") {
         if (parcelWizard.data.dropMethod === "tumya") {
-          renderAddressStep(view, "Enter the delivery address", "drop_address");
+          renderCollectLocationStep(
+            view,
+            "Enter the delivery address",
+            "drop_address",
+            "drop_lat",
+            "drop_lng",
+          );
         } else if (parcelWizard.data.dropMethod === "boda") {
           renderBodaStep(view, "Tell us about the receiving rider", {
             name: "drop_boda_name",
@@ -639,11 +744,14 @@ export function renderParcelStep(view) {
           renderPointSelectStep(view, "Choose a pickup point", "drop_point_id");
         }
       } else {
-        renderContactStep(view, "Contact person details");
+        parcelWizard.step = 8;
+        renderParcelStep(view);
+        return;
       }
       break;
     }
 
+    // --- STEP 8: review + submit ---
     case 8: {
       let originInfo = "";
       if (parcelWizard.data.pickup === "tumya") {
@@ -687,9 +795,10 @@ export function renderParcelStep(view) {
         }
       } else {
         destInfo = `
-          <div class="review-row"><strong>Delivery Address: </strong><span>${escapeHtml(parcelWizard.data.drop_address || "-")}</span></div>
-          <div class="review-row"><strong>Contact: </strong><span>${escapeHtml(parcelWizard.data.drop_contact_name || "-")}</span></div>
-          <div class="review-row"><strong>Phone: </strong><span>${escapeHtml(parcelWizard.data.drop_contact_phone || "-")}</span></div>
+          <div class="review-row">
+            <strong>Delivery Address: </strong>
+            <span>${escapeHtml(parcelWizard.data.drop_address || "-")}</span>
+          </div>
         `;
       }
 
@@ -719,7 +828,10 @@ export function renderParcelStep(view) {
       `;
 
       document.getElementById("backParcelBtn").onclick = () => {
-        parcelWizard.step = 7;
+        // For india_to_uganda there's a real sub-detail screen at step 7.
+        // For uganda_to_india, step 7 has no UI of its own (it just forwards
+        // straight to review), so going back has to skip it and land on 6.
+        parcelWizard.step = direction === "india_to_uganda" ? 7 : 6;
         renderParcelStep(view);
       };
 
@@ -742,6 +854,8 @@ export function renderParcelStep(view) {
             pickup_agent_phone: parcelWizard.data.boda_phone || null,
             pickup_notes: parcelWizard.data.boda_notes || null,
             pickup_address: parcelWizard.data.pickup_address || null,
+            pickup_lat: parcelWizard.data.pickup_lat || null,
+            pickup_lng: parcelWizard.data.pickup_lng || null,
 
             drop_handler_type:
               direction === "india_to_uganda"
@@ -755,13 +869,16 @@ export function renderParcelStep(view) {
             drop_agent_name:
               direction === "india_to_uganda"
                 ? parcelWizard.data.drop_boda_name || null
-                : parcelWizard.data.drop_contact_name || null,
+                : null,
+
             drop_agent_phone:
               direction === "india_to_uganda"
                 ? parcelWizard.data.drop_boda_phone || null
-                : parcelWizard.data.drop_contact_phone || null,
+                : null,
             drop_notes: parcelWizard.data.drop_boda_notes || null,
             drop_address: parcelWizard.data.drop_address || null,
+            drop_lat: parcelWizard.data.drop_lat || null,
+            drop_lng: parcelWizard.data.drop_lng || null,
           };
 
           const result = await Api.submitParcel(payload);

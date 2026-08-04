@@ -333,6 +333,18 @@ function catalogNextAction(order, payment) {
 
 }
 
+const QUOTE_LOCKED_STATUSES = [
+  "in_transit",
+  "out_for_delivery",
+  "delivered",
+  "ready_for_pickup",
+  "cancelled",
+];
+
+function isQuoteLocked(order) {
+  return QUOTE_LOCKED_STATUSES.includes(order.status);
+}
+
 function parcelOrderDetailHtml(order, parcel, payment) {
 
   return `
@@ -379,74 +391,87 @@ function parcelOrderDetailHtml(order, parcel, payment) {
       <h3>⚖ Weight & Quote</h3>
 
       ${
-        !parcel.weight_kg
-        ?`
+        isQuoteLocked(order)
+        ? `
+        <div class="detail-row">
+            <span>Weight</span>
+            <strong>${parcel.weight_kg ?? "—"} kg</strong>
+        </div>
 
+        <div class="detail-row">
+            <span>Quoted</span>
+            <strong>₹${parcel.quote_amount ?? "—"}</strong>
+        </div>
+
+        ${
+          parcel.suggested_amount != null
+          ? `
+          <div class="detail-row">
+              <span>Suggested (at quote time)</span>
+              <strong>₹${parcel.suggested_amount}</strong>
+          </div>
+          `
+          : ""
+        }
+
+        <p style="font-size:13px;color:var(--ink-soft);margin:8px 0 0;">
+          Quote locked — shipment has started.
+        </p>
+        `
+        : `
+        <label for="weight-input">Weight (kg)</label>
         <input
             id="weight-input"
             type="number"
             step="0.1"
-            placeholder="Weight in kg">
+            min="0.1"
+            placeholder="Weight in kg"
+            value="${parcel.weight_kg ?? ""}">
+
+        <label for="custom-quote-input" style="margin-top:12px;display:block;">
+          Custom Quote Amount (optional)
+        </label>
+        <input
+            id="custom-quote-input"
+            type="number"
+            step="0.01"
+            min="0.01"
+            placeholder="Leave empty to use auto-calculated amount"
+            value="${customQuoteInputValue(parcel)}">
+
+        ${
+          parcel.suggested_amount != null
+          ? `
+          <div class="detail-row" style="margin-top:12px;">
+              <span>Auto-calculated</span>
+              <strong id="suggested-amount">₹${parcel.suggested_amount}</strong>
+          </div>
+          `
+          : `<div class="detail-row" style="margin-top:12px;">
+              <span>Auto-calculated</span>
+              <strong id="suggested-amount">—</strong>
+          </div>`
+        }
+
+        ${
+          parcel.quote_amount != null
+          ? `
+          <div class="detail-row">
+              <span>Current quote</span>
+              <strong>₹${parcel.quote_amount}</strong>
+          </div>
+          `
+          : ""
+        }
 
         <button
             class="btn btn-block"
-            id="weigh-btn">
+            id="save-quote-btn"
+            style="margin-top:12px;">
 
-            Calculate Quote
+            ${parcel.quote_amount ? "Update Quote" : "Save / Send Quote"}
 
         </button>
-
-        `
-        :`
-
-        <div class="detail-row">
-
-            <span>Weight</span>
-
-            <strong>${parcel.weight_kg} kg</strong>
-
-        </div>
-
-        ${
-          !parcel.quote_amount
-          ?`
-
-            <div class="detail-row">
-
-                <span>Suggested</span>
-
-                <strong>${parcel.suggested_amount}</strong>
-
-            </div>
-
-            <input
-                id="quote-input"
-                type="number"
-                step="0.01"
-                value="${parcel.suggested_amount ?? ""}">
-
-            <button
-                class="btn btn-block"
-                id="quote-btn">
-
-                Send Quote
-
-            </button>
-
-          `
-          :`
-
-            <div class="detail-row">
-
-                <span>Quoted</span>
-
-                <strong>${parcel.quote_amount}</strong>
-
-            </div>
-
-          `
-        }
-
         `
       }
 
@@ -560,6 +585,16 @@ function parcelOrderDetailHtml(order, parcel, payment) {
 
   `;
 }
+function customQuoteInputValue(parcel) {
+  if (parcel.quote_amount == null || parcel.suggested_amount == null) {
+    return "";
+  }
+  if (Number(parcel.quote_amount) !== Number(parcel.suggested_amount)) {
+    return parcel.quote_amount;
+  }
+  return "";
+}
+
 function handlerSummary(parcel, prefix) {
   const type = parcel[`${prefix}_handler_type`];
   if (type === "own_agent")
@@ -627,15 +662,18 @@ function wireOrderDetailActions(order, parcel, payment) {
   const statusBtn = document.getElementById("status-update-btn");
 
   if (statusBtn) {
-
       statusBtn.addEventListener("click", async () => {
-
           try {
+              const statusSelect = document.getElementById("status-select");
+              const nextStatus = statusSelect
+                ? statusSelect.value
+                : statusBtn.dataset.next;
 
-              await AdminApi.updateStatus(
-                  order.id,
-                  statusBtn.dataset.next
-              );
+              if (!nextStatus) {
+                return toast("Select a status first", true);
+              }
+
+              await AdminApi.updateStatus(order.id, nextStatus);
 
               toast("Status updated");
 
@@ -651,28 +689,58 @@ function wireOrderDetailActions(order, parcel, payment) {
 
   }
 
-  const weighBtn = document.getElementById("weigh-btn");
-  if (weighBtn)
-    weighBtn.addEventListener("click", async () => {
-      const w = Number(document.getElementById("weight-input").value);
-      if (!w || w <= 0) return toast("Enter a valid weight", true);
-      try {
-        await AdminApi.weighParcel(order.id, w);
-        toast("Weighed");
-        renderOrderDetail(order.id);
-      } catch (err) {
-        toast(err.message, true);
-      }
+  const weightInput = document.getElementById("weight-input");
+  if (weightInput) {
+    let previewTimer;
+    weightInput.addEventListener("input", () => {
+      clearTimeout(previewTimer);
+      previewTimer = setTimeout(async () => {
+        const weight = Number(weightInput.value);
+        const suggestedEl = document.getElementById("suggested-amount");
+        if (!suggestedEl || !weight || weight <= 0) {
+          if (suggestedEl) suggestedEl.textContent = "—";
+          return;
+        }
+        try {
+          const preview = await AdminApi.previewParcelWeight(order.id, weight);
+          if (preview.suggested_amount != null) {
+            suggestedEl.textContent = `₹${preview.suggested_amount}`;
+          }
+        } catch {
+          // Preview is best-effort; save still validates on submit.
+        }
+      }, 400);
     });
+  }
 
-  const quoteBtn = document.getElementById("quote-btn");
-  if (quoteBtn)
-    quoteBtn.addEventListener("click", async () => {
-      const amt = Number(document.getElementById("quote-input").value);
-      if (!amt || amt <= 0) return toast("Enter a valid amount", true);
+  const saveQuoteBtn = document.getElementById("save-quote-btn");
+  if (saveQuoteBtn)
+    saveQuoteBtn.addEventListener("click", async () => {
+      const weightInput = document.getElementById("weight-input");
+      const customInput = document.getElementById("custom-quote-input");
+      const weight = Number(weightInput?.value);
+      const customRaw = customInput?.value?.trim();
+
+      if (!weight || weight <= 0) {
+        return toast("Enter a valid weight", true);
+      }
+
+      const payload = { weight_kg: weight };
+      if (customRaw) {
+        const customAmount = Number(customRaw);
+        if (!customAmount || customAmount <= 0) {
+          return toast("Custom quote must be a positive number", true);
+        }
+        payload.custom_amount = customAmount;
+      }
+
       try {
-        await AdminApi.quoteParcel(order.id, amt);
-        toast("Quoted");
+        const result = await AdminApi.updateParcelQuote(order.id, payload);
+        const suggestedEl = document.getElementById("suggested-amount");
+        if (suggestedEl && result.suggested_amount != null) {
+          suggestedEl.textContent = `₹${result.suggested_amount}`;
+        }
+        toast(result.is_first_quote ? "Quote sent" : "Quote updated");
         renderOrderDetail(order.id);
       } catch (err) {
         toast(err.message, true);

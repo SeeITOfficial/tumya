@@ -95,13 +95,13 @@ export const AdminApi = (() => {
         method: "POST",
         body: { reference_number },
       }),
-    weighParcel: (id, weight_kg) =>
-      request(`/parcels/${id}/weigh`, { method: "POST", body: { weight_kg } }),
-    quoteParcel: (id, quote_amount) =>
-      request(`/parcels/${id}/quote`, {
+    updateParcelQuote: (id, payload) =>
+      request(`/parcels/${id}/quote-update`, {
         method: "POST",
-        body: { quote_amount },
+        body: payload,
       }),
+    previewParcelWeight: (id, weight_kg) =>
+      request(`/parcels/${id}/weigh`, { method: "POST", body: { weight_kg } }),
     confirmParcelPayment: (id) =>
       request(`/parcels/${id}/payment/confirm`, { method: "POST" }),
     getRates: () => request("/parcels/rates"),

@@ -376,6 +376,75 @@ ${status}
   });
 }
 
+async function sendParcelQuote({
+  email,
+  customerName,
+  orderNumber,
+  quoteAmount,
+  weightKg,
+  isUpdate = false,
+}) {
+  const title = isUpdate ? "Parcel Quote Updated" : "Your Parcel Quote is Ready";
+  const message = isUpdate
+    ? "We've updated the quote for your parcel. Please review the new amount below."
+    : "We've weighed your parcel and prepared a quote. You can proceed to payment in the Tumya app.";
+
+  const html = emailLayout(
+    isUpdate ? "Parcel Quote Updated 📦" : "Your Parcel Quote is Ready 📦",
+    `
+<p style="font-size:16px;color:#555;line-height:1.8;">
+Hello <strong>${customerName}</strong>,
+</p>
+
+<p style="font-size:16px;color:#555;line-height:1.8;">
+${message}
+</p>
+
+<div style="
+background:#fff7ed;
+border:2px solid #ffe3c2;
+border-radius:12px;
+padding:22px;
+margin:30px 0;
+">
+
+<table width="100%" cellspacing="0" cellpadding="8">
+
+<tr>
+<td><strong>Tracking</strong></td>
+<td align="right">${orderNumber}</td>
+</tr>
+
+<tr>
+<td><strong>Weight</strong></td>
+<td align="right">${weightKg} kg</td>
+</tr>
+
+<tr>
+<td><strong>Quote</strong></td>
+<td align="right" style="color:#ff7a00;font-weight:bold;">
+₹${Number(quoteAmount).toFixed(2)}
+</td>
+</tr>
+
+</table>
+
+</div>
+
+<p style="font-size:15px;color:#666;line-height:1.8;margin:0;">
+Open the Tumya app to view your order and pay when you're ready.
+</p>
+`
+  );
+
+  return sendEmail({
+    to: email,
+    subject: `Tumya • ${title} — ${orderNumber}`,
+    text: `${title}\n\nTracking: ${orderNumber}\nWeight: ${weightKg} kg\nQuote: ₹${Number(quoteAmount).toFixed(2)}\n\n${message}`,
+    html,
+  });
+}
+
 // Parse comma-separated admin emails from env, e.g. "a@x.com,b@x.com,c@x.com"
 function getAdminEmails() {
   const raw = process.env.ADMIN_NOTIFICATION_EMAIL || "";
@@ -489,4 +558,5 @@ module.exports = {
   sendOrderCancelled,
   sendNewOrderAdminAlert,
   sendOrderCancelledAdminAlert,
+  sendParcelQuote,
 };
